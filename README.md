@@ -58,7 +58,8 @@ concept2-backup/
 │   └── package.json                  # Node.js 依赖
 ├── .github/
 │   └── workflows/
-│       └── backup.yml                # GitHub Actions 工作流
+│       ├── backup.yml                # 主要备份工作流（自动 + 手动）
+│       └── download-full-history.yml # 专用完整历史下载工作流（手动）
 └── data/                             # TCX 文件（运行时创建）
     ├── 2024/
     └── 2025/
@@ -109,6 +110,15 @@ pdm run python download_single.py 12345
 ```
 
 #### GitHub Actions
+
+**方法 1：使用专用工作流（推荐）**
+
+1. 进入 GitHub 仓库的 **Actions** 选项卡
+2. 选择 **Download Full History** 工作流
+3. 点击 **Run workflow** 按钮
+4. 点击 **Run workflow**（无需其他参数）
+
+**方法 2：使用备份工作流**
 
 1. 进入 GitHub 仓库的 **Actions** 选项卡
 2. 选择 **Backup Concept2 Activities** 工作流
@@ -341,6 +351,18 @@ main = "src/index.js"
 compatibility_date = "2025-11-21"
 ```
 
+### GitHub Actions 工作流
+
+**`.github/workflows/backup.yml`**:
+- **触发方式**：repository_dispatch（自动）和 workflow_dispatch（手动）
+- **功能**：支持下载单个活动或完整历史
+- **参数**：mode（full/single），result_id（可选）
+
+**`.github/workflows/download-full-history.yml`**（新增）：
+- **触发方式**：workflow_dispatch（手动）
+- **功能**：专用于下载完整历史（简化版，无需选择模式）
+- **优势**：操作更简单，一键下载全部
+
 ### 目录说明
 
 - **scripts/**: Python 下载脚本
@@ -354,7 +376,8 @@ compatibility_date = "2025-11-21"
   - `package.json`: Node.js 依赖
 
 - **.github/workflows/**: GitHub Actions 配置
-  - `backup.yml`: 备份工作流
+  - `backup.yml`: 主要备份工作流（自动 + 手动）
+  - `download-full-history.yml`: 专用完整历史下载工作流（手动）
 
 - **data/**: TCX 文件存储 (Git 管理)
   - 按年份组织: `2024/`, `2025/`, etc.
