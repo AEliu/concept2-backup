@@ -28,8 +28,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 # API Constants
+TOKEN_URL = 'https://log.concept2.com/oauth/access_token'
 API_BASE = 'https://log.concept2.com/api'
-TOKEN_URL = f'{API_BASE}/oauth/access_token'
 RESULTS_URL = f'{API_BASE}/users/me/results'
 
 # Configuration
