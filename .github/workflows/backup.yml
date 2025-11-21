@@ -25,6 +25,9 @@ jobs:
   backup:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
       # 1. Checkout the repository
       - name: Checkout code
