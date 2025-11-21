@@ -1,8 +1,21 @@
 name: Backup Concept2 Activities
 
 on:
-  # Manual trigger for full history download
+  # Manual trigger with options
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Download mode'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - single
+      result_id:
+        description: 'Result ID (only needed for single mode)'
+        required: false
+        type: string
 
   # Triggered by Cloudflare Worker for new activities
   repository_dispatch:
@@ -26,40 +39,56 @@ jobs:
         with:
           python-version: '3.13'
 
-      # 3. Install dependencies
-      - name: Install dependencies
+      # 3. Install PDM
+      - name: Install PDM
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install pdm
 
-      # 4. Set environment variables from secrets
+      # 4. Install dependencies
+      - name: Install dependencies
+        run: |
+          cd scripts
+          pdm install
+
+      # 5. Set environment variables from secrets
       - name: Configure environment
         env:
-          C2_CLIENT_ID: ${{ secrets.C2_CLIENT_ID }}
-          C2_CLIENT_SECRET: ${{ secrets.C2_CLIENT_SECRET }}
-          C2_REFRESH_TOKEN: ${{ secrets.C2_REFRESH_TOKEN }}
+          C2_ACCESS_TOKEN: ${{ secrets.C2_ACCESS_TOKEN }}
         run: |
-          echo "C2_CLIENT_ID=${C2_CLIENT_ID}" >> $GITHUB_ENV
-          echo "C2_CLIENT_SECRET=${C2_CLIENT_SECRET}" >> $GITHUB_ENV
-          echo "C2_REFRESH_TOKEN=${C2_REFRESH_TOKEN}" >> $GITHUB_ENV
+          echo "C2_ACCESS_TOKEN=${C2_ACCESS_TOKEN}" >> $GITHUB_ENV
 
-      # 5. Download based on trigger type
+      # 6. Validate authentication
+      - name: Validate Concept2 Access Token
+        run: |
+          cd scripts
+          pdm run python simple_auth.py
+
+      # 7. Download based on trigger type
       - name: Download single activity (repository dispatch)
         if: github.event_name == 'repository_dispatch'
         run: |
           RESULT_ID=${{ github.event.client_payload.result_id }}
           echo "Downloading activity with result_id: $RESULT_ID"
           cd scripts
-          python download_single.py $RESULT_ID
+          pdm run python download_single.py $RESULT_ID
+
+      - name: Download single activity (manual trigger)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'single' && github.event.inputs.result_id != ''
+        run: |
+          RESULT_ID=${{ github.event.inputs.result_id }}
+          echo "Downloading activity with result_id: $RESULT_ID"
+          cd scripts
+          pdm run python download_single.py $RESULT_ID
 
       - name: Download full history (manual trigger)
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'full'
         run: |
           echo "Downloading full workout history..."
           cd scripts
-          python download_history.py
+          pdm run python download_history.py
 
-      # 6. Check if there are changes
+      # 8. Check if there are changes
       - name: Check for changes
         id: check_changes
         run: |
@@ -70,14 +99,14 @@ jobs:
             echo "No new activities to commit."
           fi
 
-      # 7. Configure git
+      # 9. Configure git
       - name: Configure git
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           git config --local user.email "c2-bot@users.noreply.github.com"
           git config --local user.name "C2-Bot"
 
-      # 8. Commit and push changes
+      # 10. Commit and push changes
       - name: Commit changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
@@ -91,12 +120,21 @@ jobs:
             🤖 Automated backup of Concept2 activity
 
             Co-authored-by: C2-Bot <c2-bot@users.noreply.github.com>"
-          else
-            git commit -m "Update activity history
+          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.mode }}" == "single" ]; then
+              RESULT_ID=${{ github.event.inputs.result_id }}
+              git commit -m "Add activity ${RESULT_ID}
+
+            🤖 Automated backup of Concept2 activity
+
+            Co-authored-by: C2-Bot <c2-bot@users.noreply.github.com>"
+            else
+              git commit -m "Update activity history
 
             🤖 Automated backup of Concept2 activity history
 
             Co-authored-by: C2-Bot <c2-bot@users.noreply.github.com>"
+            fi
           fi
 
       - name: Push changes
@@ -106,7 +144,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ github.ref }}
 
-      # 9. Summary
+      # 11. Summary
       - name: Summary
         run: |
           echo "## Backup Summary" >> $GITHUB_STEP_SUMMARY
@@ -116,9 +154,13 @@ jobs:
             RESULT_ID=${{ github.event.client_payload.result_id }}
             echo "**Trigger:** New activity webhook" >> $GITHUB_STEP_SUMMARY
             echo "**Activity ID:** $RESULT_ID" >> $GITHUB_STEP_SUMMARY
-          else
+          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "**Trigger:** Manual workflow dispatch" >> $GITHUB_STEP_SUMMARY
-            echo "**Action:** Full history download" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ github.event.inputs.mode }}" == "single" ]; then
+              echo "**Action:** Download single activity (ID: ${{ github.event.inputs.result_id }})" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "**Action:** Full history download" >> $GITHUB_STEP_SUMMARY
+            fi
           fi
 
           if [ "${{ steps.check_changes.outputs.has_changes }}" == "true" ]; then

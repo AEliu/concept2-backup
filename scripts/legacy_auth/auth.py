@@ -19,13 +19,20 @@ import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 import sys
+import os
+import json
+from datetime import datetime, timedelta
+from pathlib import Path
+
+# Import token storage logic from auth_client
+from auth_client import Concept2AuthClient, CACHE_DIR, TOKEN_CACHE_FILE
 
 # Constants
 AUTH_URL = 'https://log.concept2.com/oauth/authorize'
 TOKEN_URL = 'https://log.concept2.com/oauth/access_token'
 REDIRECT_URI = 'http://localhost:8080/callback'
-# Scope for accessing user results
-SCOPE = 'results:read'
+# Scope for accessing user results - 使用完整的scope支持未来扩展
+SCOPE = 'user:read,results:read'
 
 
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
@@ -174,12 +181,42 @@ def main():
         print(f"\nRefresh Token:\n{token_response['refresh_token']}")
         print(f"\nExpires In: {token_response.get('expires_in', 'N/A')} seconds")
         print("\n" + "="*60)
-        print("\nSave these tokens securely!")
-        print("The Refresh Token can be used to obtain new Access Tokens.")
-        print("\nSet the following environment variables:")
-        print(f"  export C2_CLIENT_ID='{client_id}'")
-        print(f"  export C2_CLIENT_SECRET='{client_secret}'")
-        print(f"  export C2_REFRESH_TOKEN='{token_response['refresh_token']}'")
+
+        # 自动保存token到缓存文件
+        try:
+            print("正在保存token到缓存文件...")
+
+            # 确保缓存目录存在
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+            # 创建token缓存数据
+            expires_in = token_response.get('expires_in', 3600)
+            expires_at = datetime.now() + timedelta(seconds=expires_in)
+
+            cache_data = {
+                'access_token': token_response['access_token'],
+                'refresh_token': token_response['refresh_token'],
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'expires_at': expires_at.isoformat(),
+                'cached_at': datetime.now().isoformat(),
+                'scope': SCOPE  # 保存授权时的scope
+            }
+
+            # 保存到缓存文件
+            with open(TOKEN_CACHE_FILE, 'w') as f:
+                json.dump(cache_data, f, indent=2)
+
+            print(f"✅ Token已保存到: {TOKEN_CACHE_FILE}")
+            print("\n现在你可以直接运行下载脚本，无需手动设置环境变量！")
+            print("例如: pdm run python download_history.py")
+
+        except Exception as e:
+            print(f"⚠️  Token保存失败: {e}")
+            print("请手动设置以下环境变量:")
+            print(f"  export C2_CLIENT_ID='{client_id}'")
+            print(f"  export C2_CLIENT_SECRET='{client_secret}'")
+            print(f"  export C2_REFRESH_TOKEN='{token_response['refresh_token']}'")
 
     except requests.exceptions.HTTPError as e:
         print(f"\nError exchanging code for token: {e}")

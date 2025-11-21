@@ -6,10 +6,8 @@ Usage:
     python download_single.py <result_id>
 
 Prerequisites:
-    Set environment variables:
-    - C2_CLIENT_ID
-    - C2_CLIENT_SECRET
-    - C2_REFRESH_TOKEN
+    Set environment variable:
+    - C2_ACCESS_TOKEN (your Concept2 Logbook API Access Token)
 """
 
 import os
@@ -19,73 +17,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-# API Constants
-TOKEN_URL = 'https://log.concept2.com/oauth/access_token'
-API_BASE = 'https://log.concept2.com/api'
-RESULTS_URL = f'{API_BASE}/users/me/results'
-
-
-class Concept2API:
-    """Client for Concept2 Logbook API"""
-
-    def __init__(self, client_id: str, client_secret: str, refresh_token: str):
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.refresh_token = refresh_token
-        self.access_token = None
-
-    def refresh_access_token(self) -> str:
-        """Use refresh token to get a new access token"""
-        data = {
-            'client_id': self.client_id,
-            'client_secret': self.client_secret,
-            'refresh_token': self.refresh_token,
-            'grant_type': 'refresh_token'
-        }
-
-        print("Refreshing access token...")
-        response = requests.post(TOKEN_URL, data=data)
-        response.raise_for_status()
-
-        token_data = response.json()
-        self.access_token = token_data['access_token']
-        return self.access_token
-
-    def get_headers(self):
-        """Get authentication headers for API requests"""
-        if not self.access_token:
-            self.refresh_access_token()
-
-        return {
-            'Authorization': f'Bearer {self.access_token}',
-            'Accept': 'application/json'
-        }
-
-    def download_tcx(self, result_id: int) -> bytes:
-        """Download TCX file for a specific result"""
-        tcx_url = f'{RESULTS_URL}/{result_id}/export/tcx'
-
-        response = requests.get(
-            tcx_url,
-            headers=self.get_headers()
-        )
-        response.raise_for_status()
-
-        return response.content
-
-    def get_result_metadata(self, result_id: int) -> dict:
-        """Get metadata for a specific result"""
-        result_url = f'{RESULTS_URL}/{result_id}'
-
-        response = requests.get(
-            result_url,
-            headers=self.get_headers()
-        )
-        response.raise_for_status()
-
-        # API response has "data" wrapper, extract the actual result data
-        result_data = response.json()
-        return result_data.get('data', {})
+# 导入简化的认证客户端
+from simple_auth import create_simple_api_client
 
 
 def get_workout_date(result: dict) -> str:
@@ -154,28 +87,24 @@ def main():
 
     print(f"\n=== Downloading Activity {result_id} ===\n")
 
-    # Get environment variables
-    client_id = os.environ.get('C2_CLIENT_ID')
-    client_secret = os.environ.get('C2_CLIENT_SECRET')
-    refresh_token = os.environ.get('C2_REFRESH_TOKEN')
-
-    if not all([client_id, client_secret, refresh_token]):
-        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error: Missing required environment variables")
-        print("Please set:")
-        print("  - C2_CLIENT_ID")
-        print("  - C2_CLIENT_SECRET")
-        print("  - C2_REFRESH_TOKEN")
-        sys.exit(1)
-
-    # Initialize API client
-    api = Concept2API(client_id, client_secret, refresh_token)
-
-    # Ensure data directory exists
-    data_dir = Path(__file__).parent.parent / 'data'
-    data_dir.mkdir(exist_ok=True)
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Data directory: {data_dir}")
-
     try:
+        # 使用简化的认证客户端
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 初始化API客户端...")
+        api = create_simple_api_client()
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ API客户端初始化成功")
+
+        # 验证凭据
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 验证API凭据...")
+        if not api.auth.validate_credentials():
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ API凭据验证失败")
+            sys.exit(1)
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ API凭据验证成功")
+
+        # Ensure data directory exists
+        data_dir = Path(__file__).parent.parent / 'data'
+        data_dir.mkdir(exist_ok=True)
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Data directory: {data_dir}")
+
         # Get metadata first
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Fetching metadata for result {result_id}...")
         result = api.get_result_metadata(result_id)
