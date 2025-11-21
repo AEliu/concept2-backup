@@ -1,0 +1,130 @@
+name: Backup Concept2 Activities
+
+on:
+  # Manual trigger for full history download
+  workflow_dispatch:
+
+  # Triggered by Cloudflare Worker for new activities
+  repository_dispatch:
+    types: [c2_new_activity]
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Fetch all history so we can push back
+          fetch-depth: 0
+
+      # 2. Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      # 3. Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      # 4. Set environment variables from secrets
+      - name: Configure environment
+        env:
+          C2_CLIENT_ID: ${{ secrets.C2_CLIENT_ID }}
+          C2_CLIENT_SECRET: ${{ secrets.C2_CLIENT_SECRET }}
+          C2_REFRESH_TOKEN: ${{ secrets.C2_REFRESH_TOKEN }}
+        run: |
+          echo "C2_CLIENT_ID=${C2_CLIENT_ID}" >> $GITHUB_ENV
+          echo "C2_CLIENT_SECRET=${C2_CLIENT_SECRET}" >> $GITHUB_ENV
+          echo "C2_REFRESH_TOKEN=${C2_REFRESH_TOKEN}" >> $GITHUB_ENV
+
+      # 5. Download based on trigger type
+      - name: Download single activity (repository dispatch)
+        if: github.event_name == 'repository_dispatch'
+        run: |
+          RESULT_ID=${{ github.event.client_payload.result_id }}
+          echo "Downloading activity with result_id: $RESULT_ID"
+          cd scripts
+          python download_single.py $RESULT_ID
+
+      - name: Download full history (manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "Downloading full workout history..."
+          cd scripts
+          python download_history.py
+
+      # 6. Check if there are changes
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No new activities to commit."
+          fi
+
+      # 7. Configure git
+      - name: Configure git
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "c2-bot@users.noreply.github.com"
+          git config --local user.name "C2-Bot"
+
+      # 8. Commit and push changes
+      - name: Commit changes
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
+          git add data/
+
+          # Generate commit message based on trigger type
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            RESULT_ID=${{ github.event.client_payload.result_id }}
+            git commit -m "Add activity ${RESULT_ID}
+
+            🤖 Automated backup of Concept2 activity
+
+            Co-authored-by: C2-Bot <c2-bot@users.noreply.github.com>"
+          else
+            git commit -m "Update activity history
+
+            🤖 Automated backup of Concept2 activity history
+
+            Co-authored-by: C2-Bot <c2-bot@users.noreply.github.com>"
+          fi
+
+      - name: Push changes
+        if: steps.check_changes.outputs.has_changes == 'true'
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+
+      # 9. Summary
+      - name: Summary
+        run: |
+          echo "## Backup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            RESULT_ID=${{ github.event.client_payload.result_id }}
+            echo "**Trigger:** New activity webhook" >> $GITHUB_STEP_SUMMARY
+            echo "**Activity ID:** $RESULT_ID" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Trigger:** Manual workflow dispatch" >> $GITHUB_STEP_SUMMARY
+            echo "**Action:** Full history download" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.check_changes.outputs.has_changes }}" == "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ✅ New activities downloaded and committed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ℹ️ No new activities to download" >> $GITHUB_STEP_SUMMARY
+          fi
