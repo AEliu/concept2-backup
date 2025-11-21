@@ -1,0 +1,6 @@
+name = "c2-webhook-handler"
+main = "src/index.js"
+compatibility_date = "2025-11-21"
+
+# Environment variables (set with wrangler secret)
+# GITHUB_PAT - GitHub Personal Access Token for API access
