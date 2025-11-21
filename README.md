@@ -15,25 +15,24 @@
 
 ## TODO / 未来计划
 
-### Phase 1: Workers OAuth 登录流 (进行中)
-在 `worker/` 目录中实现类似第三方 OAuth 的登录体验：
+### Phase 1: Workers 认证助手 (进行中)
+在 `worker/` 目录中实现认证助手页面：
 
-1. **Workers 登录页面**
-   - 在 `worker/src/` 创建简单的 HTML 登录页面
-   - 用户首次访问时，页面引导用户到 Concept2 授权
-   - 授权成功后，显示长期 Access Token
+1. **Workers 认证页面**
+   - 在 `worker/src/` 创建简单的 HTML 页面
+   - 指导用户获取 Concept2 Access Token
    - 提供一键复制按钮，方便用户添加到 GitHub Secrets
 
 2. **Token 管理**
    - 用户将 Access Token 复制到 GitHub Secrets (C2_ACCESS_TOKEN)
    - 后续所有 GitHub Actions 使用该 Token 访问 API
-   - 无需 OAuth2 的 client_id, client_secret, refresh_token
+   - 简化配置：只需一个 Token
 
 3. **优势**
-   - 用户体验更友好，类似 "使用 Concept2 登录"
+   - 用户体验更友好
    - Token 长期有效，无需刷新
    - 安全性更高：Token 只存储在 GitHub Secrets
-   - 架构简化：去掉 OAuth2 流程的复杂性
+   - 架构简化：去掉复杂的认证流程
 
 ### Phase 2: 增强功能
 
@@ -51,7 +50,6 @@ concept2-backup/
 │   ├── simple_auth.py                # 简化认证 (Access Token)
 │   ├── download_history.py           # 下载所有活动
 │   ├── download_single.py            # 下载单个活动
-│   ├── legacy_auth/                  # 旧版 OAuth2 认证 (已弃用)
 │   └── pyproject.toml                # PDM 配置
 ├── worker/                           # Cloudflare Worker
 │   ├── src/
@@ -89,8 +87,6 @@ concept2-backup/
 |--------|-------------|
 | `C2_ACCESS_TOKEN` | Concept2 个人 Access Token |
 | `GITHUB_TOKEN` | 自动提供，无需手动设置 |
-
-**注意**：旧版的 `C2_CLIENT_ID`, `C2_CLIENT_SECRET`, `C2_REFRESH_TOKEN` 已弃用，不再需要。
 
 ### 2. 运行手动备份
 
@@ -254,19 +250,6 @@ curl --request GET \
 - 适合个人数据备份场景
 - 符合 Concept2 "for your own workout data" 的使用场景
 
-### 旧版 OAuth2 (已弃用)
-
-旧版本需要：
-- `C2_CLIENT_ID`
-- `C2_CLIENT_SECRET`
-- `C2_REFRESH_TOKEN`
-
-**迁移到新版：**
-1. 在 Concept2 账户设置中获取 Access Token
-2. 在 GitHub Secrets 中设置 `C2_ACCESS_TOKEN`
-3. 删除旧的三个 secrets
-4. 更新脚本使用新的 `simple_auth.py`
-
 ## GitHub Actions 工作流
 
 ### 触发方式
@@ -364,7 +347,6 @@ compatibility_date = "2025-11-21"
   - `simple_auth.py`: Access Token 认证
   - `download_history.py`: 下载所有历史活动
   - `download_single.py`: 下载单个活动
-  - `legacy_auth/`: 旧版 OAuth2 文件 (已弃用)
 
 - **worker/**: Cloudflare Worker
   - `src/index.js`: Webhook 处理器
@@ -529,7 +511,6 @@ Concept2® 是 Concept2, Inc. 的注册商标。
 
 ### v1.0.0
 - 初始版本
-- OAuth2 认证支持
 - Webhook 自动备份
 - GitHub Actions 集成
 
@@ -557,241 +538,3 @@ Automatically backup your Concept2 rowing workouts to GitHub with TCX files.
 - 🖥️ **Manual Backup** - Download complete history anytime
 - 🆔 **Deduplication** - Won't re-download existing activities
 
-## Project Structure
-
-```
-concept2-backup/
-├── scripts/                          # Python scripts
-│   ├── auth.py                       # OAuth2 authentication
-│   ├── download_history.py           # Download all activities
-│   ├── download_single.py            # Download single activity
-│   └── pyproject.toml                # PDM configuration
-├── worker/                           # Cloudflare Worker
-│   ├── src/
-│   │   └── index.js                  # Webhook handler
-│   ├── wrangler.toml                 # Worker configuration
-│   └── package.json                  # Node.js dependencies
-├── .github/
-│   └── workflows/
-│       └── backup.yml                # GitHub Actions workflow
-└── data/                             # TCX files (created at runtime)
-    ├── 2024/
-    └── 2025/
-```
-
-## Quick Start
-
-### 1. Get Concept2 API Credentials
-
-```bash
-cd scripts
-pdm run python auth.py
-```
-
-Follow the prompts to get your tokens. Save these values - you'll need them for GitHub secrets.
-
-### 2. Run Manual Backup
-
-```bash
-# Set environment variables
-export C2_CLIENT_ID="your_client_id"
-export C2_CLIENT_SECRET="your_client_secret"
-export C2_REFRESH_TOKEN="your_refresh_token"
-
-# Download full history
-pdm run python download_history.py
-```
-
-### 3. Download Single Activity
-
-```bash
-pdm run python download_single.py 12345
-```
-
-## Setup Automation
-
-### GitHub Secrets
-
-Add these secrets to your repository (Settings → Secrets and variables → Actions):
-
-| Secret | Description |
-|--------|-------------|
-| `C2_CLIENT_ID` | Concept2 API Client ID |
-| `C2_CLIENT_SECRET` | Concept2 API Client Secret |
-| `C2_REFRESH_TOKEN` | Concept2 API Refresh Token |
-
-### Deploy Worker on Cloudflare
-
-#### Method 1: Via GitHub Repository (Recommended)
-
-1. Log in to [Cloudflare Dashboard](https://dash.cloudflare.com/)
-2. Navigate to **Workers & Pages**
-3. Click **Create application**
-4. Select **Import GitHub repository**
-5. Authorize Cloudflare to access your GitHub account
-6. Select this repository (AEliu/concept2-backup)
-7. Build settings:
-   - Build command: `(empty)`
-   - Build output directory: `(empty)`
-8. After deployment, set environment variables:
-   - Go to **Settings** → **Environment variables**
-   - Add `GITHUB_PAT`: Your GitHub Personal Access Token
-9. Get your Worker URL (e.g., `https://c2-webhook-handler.your-name.workers.dev`)
-
-#### Method 2: Using Wrangler CLI
-
-```bash
-cd worker
-
-# Login to Cloudflare
-wrangler login
-
-# Set your GitHub Personal Access Token
-wrangler secret put GITHUB_PAT
-
-# Deploy the worker
-wrangler deploy
-```
-
-### Configure Concept2 Webhook
-
-1. Deploy the worker and get your worker URL
-2. Go to https://log.concept2.com/developers/
-3. Add webhook URL: `https://your-worker.your-subdomain.workers.dev`
-
-## How It Works
-
-### Automated Flow (New Activity)
-
-```
-Concept2 Workout Completed
-    ↓
-Concept2 Webhook Triggered
-    ↓
-Cloudflare Worker (c2-webhook-handler)
-    ↓
-GitHub Repository Dispatch (event: c2_new_activity)
-    ↓
-GitHub Actions Workflow (.github/workflows/backup.yml)
-    ↓
-scripts/download_single.py (specific result_id)
-    ↓
-Commit & Push to data/{Year}/
-```
-
-### Manual Flow (Full Backup)
-
-```
-GitHub Actions → Manual Trigger
-    ↓
-GitHub Actions Workflow (.github/workflows/backup.yml)
-    ↓
-scripts/download_history.py (all activities)
-    ↓
-Commit & Push to data/{Year}/
-```
-
-## GitHub Actions Workflows
-
-### Manual Trigger
-
-Go to Actions tab → "Backup Concept2 Activities" → Run workflow
-
-### Webhook Trigger
-
-Automatically triggered when you complete a workout (if webhook is configured)
-
-## Development
-
-### Local Development
-
-**Cloudflare Worker:**
-```bash
-cd worker
-wrangler dev --port 8787
-```
-
-Test with:
-```bash
-curl -X POST http://localhost:8787 \
-  -H "Content-Type: application/json" \
-  -d '{"result_id": 12345}'
-```
-
-### Dependencies
-
-**Python:**
-```bash
-cd scripts
-pdm install
-```
-
-**Node.js:**
-```bash
-cd worker
-npm install
-```
-
-## Configuration Files
-
-### worker/wrangler.toml
-```toml
-name = "c2-webhook-handler"
-main = "src/index.js"
-compatibility_date = "2025-11-21"
-```
-
-### .github/workflows/backup.yml
-
-- Trigger: `workflow_dispatch` or `repository_dispatch`
-- Python: 3.13
-- Dependencies: requests
-- Secrets: C2_CLIENT_ID, C2_CLIENT_SECRET, C2_REFRESH_TOKEN
-
-## File Naming
-
-TCX files are saved as:
-```
-data/{Year}/{Date}_{ResultID}.tcx
-
-Example:
-data/2024/2024_11_21_12345.tcx
-```
-
-## API Documentation
-
-- Concept2 Logbook API: https://log.concept2.com/developers/documentation/
-- GitHub Repository Dispatch: https://docs.github.com/en/rest/repos/repos#create-a-repository-dispatch-event
-- Cloudflare Workers: https://developers.cloudflare.com/workers/
-
-## Troubleshooting
-
-### Worker Returns "GITHUB_PAT not set"
-
-Set the secret: `wrangler secret put GITHUB_PAT` or set environment variable in Cloudflare Dashboard
-
-### Workflow Fails with Authentication Error
-
-Check your GitHub secrets (C2_CLIENT_ID, C2_CLIENT_SECRET, C2_REFRESH_TOKEN)
-
-### Duplicate Files
-
-The scripts check for existing files before downloading
-
-## Contributing
-
-Feel free to submit issues and enhancement requests!
-
-## License
-
-MIT
-
-## Support
-
-- Concept2 API Docs: https://log.concept2.com/developers/
-- GitHub Actions Docs: https://docs.github.com/en/actions
-- Cloudflare Workers Docs: https://developers.cloudflare.com/workers/
-
----
-
-**Concept2** is a trademark of Concept2, Inc. This project is not affiliated with or endorsed by Concept2.

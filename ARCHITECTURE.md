@@ -82,9 +82,6 @@
 │  - 批量下载 TCX 文件                                           │
 │  - 按年份组织文件                                               │
 │  - 智能跳过已下载的文件                                         │
-│                                                                 │
-│  Legacy: legacy_auth/ (已弃用)                                  │
-│  - OAuth2 认证文件 (auth.py, auth_client.py)                    │
 └──────────────────────────┬──────────────────────────────────────┘
                            │
                            ▼
@@ -274,33 +271,6 @@
 - 不传送给 Cloudflare Worker
 - 只在 GitHub Actions 中使用
 - Token 长期有效，无需刷新
-
-### 旧版 OAuth2 (已弃用)
-
-旧流程 (不应再使用)：
-```
-1. GitHub Secrets 中存储:
-   - C2_CLIENT_ID
-   - C2_CLIENT_SECRET
-   - C2_REFRESH_TOKEN
-   ↓
-2. 使用 refresh_token 获取 access_token
-   POST https://log.concept2.com/oauth/access_token
-   ↓
-3. Token 缓存到文件 ~/.concept2/cache/tokens.json
-   ↓
-4. 使用 access_token 访问 API
-   ↓
-5. Token 过期后刷新
-```
-
-问题：
-- 需要管理多个 secrets
-- Token 会过期，需要刷新逻辑
-- 缓存文件复杂
-- OAuth2 流程繁琐
-
-解决方案已在 v2.0.0 实现：简化认证
 
 ## Workers OAuth 登录流 (TODO)
 
