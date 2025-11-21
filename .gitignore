@@ -1,0 +1,11 @@
+# Environment files
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Data files (tcx files will be stored here but not tracked)
+data/*.tcx
+data/**/*.tcx
