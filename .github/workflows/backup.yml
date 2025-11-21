@@ -92,6 +92,7 @@ jobs:
       - name: Check for changes
         id: check_changes
         run: |
+          git add -f data/
           if [ -n "$(git status --porcelain)" ]; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
           else
@@ -110,7 +111,7 @@ jobs:
       - name: Commit changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
-          git add data/
+          
 
           # Generate commit message based on trigger type
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
