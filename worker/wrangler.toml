@@ -1,4 +1,4 @@
-name = "c2-webhook-handler"
+name = 'concept2-backup'
 main = "src/index.js"
 compatibility_date = "2025-11-21"
 
