@@ -9,3 +9,4 @@ Thumbs.db
 # Data files (tcx files will be stored here but not tracked)
 data/*.tcx
 data/**/*.tcx
+test_direct_download.sh

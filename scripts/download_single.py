@@ -83,7 +83,9 @@ class Concept2API:
         )
         response.raise_for_status()
 
-        return response.json()
+        # API response has "data" wrapper, extract the actual result data
+        result_data = response.json()
+        return result_data.get('data', {})
 
 
 def get_workout_date(result: dict) -> str:
@@ -137,17 +139,20 @@ def save_tcx_file(data_dir: Path, result: dict, tcx_content: bytes) -> Path:
 
 def main():
     """Download a single activity"""
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting Concept2 activity download")
+
     if len(sys.argv) < 2:
-        print("Usage: python download_single.py <result_id>")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error: Usage: python download_single.py <result_id>")
         sys.exit(1)
 
     try:
         result_id = int(sys.argv[1])
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Target result_id: {result_id}")
     except ValueError:
-        print(f"Error: result_id must be a number, got '{sys.argv[1]}'")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error: result_id must be a number, got '{sys.argv[1]}'")
         sys.exit(1)
 
-    print(f"=== Downloading Activity {result_id} ===\n")
+    print(f"\n=== Downloading Activity {result_id} ===\n")
 
     # Get environment variables
     client_id = os.environ.get('C2_CLIENT_ID')
@@ -155,7 +160,7 @@ def main():
     refresh_token = os.environ.get('C2_REFRESH_TOKEN')
 
     if not all([client_id, client_secret, refresh_token]):
-        print("Error: Missing required environment variables")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error: Missing required environment variables")
         print("Please set:")
         print("  - C2_CLIENT_ID")
         print("  - C2_CLIENT_SECRET")
@@ -168,11 +173,18 @@ def main():
     # Ensure data directory exists
     data_dir = Path(__file__).parent.parent / 'data'
     data_dir.mkdir(exist_ok=True)
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Data directory: {data_dir}")
 
     try:
         # Get metadata first
-        print(f"Fetching metadata for result {result_id}...")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Fetching metadata for result {result_id}...")
         result = api.get_result_metadata(result_id)
+
+        if not result:
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error: Could not fetch metadata for result_id {result_id}")
+            sys.exit(1)
+
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Successfully fetched metadata")
 
         # Check if file already exists
         year = get_workout_year(result) or 'unknown_year'
@@ -181,21 +193,23 @@ def main():
         file_path = year_dir / filename
 
         if file_path.exists():
-            print(f"File already exists: {file_path.relative_to(data_dir.parent)}")
-            print("Skipping download.")
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] File already exists: {file_path.relative_to(data_dir.parent)}")
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Skipping download.")
             sys.exit(0)
 
         # Download TCX file
         workout_date = get_workout_date(result) or 'unknown date'
-        print(f"Downloading activity from {workout_date}...")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Downloading activity from {workout_date}...")
         tcx_content = api.download_tcx(result_id)
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Downloaded {len(tcx_content)} bytes")
 
         # Save file
         saved_path = save_tcx_file(data_dir, result, tcx_content)
-        print(f"Saved to: {saved_path.relative_to(data_dir.parent)}")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Saved to: {saved_path.relative_to(data_dir.parent)}")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Download completed successfully")
 
     except requests.exceptions.HTTPError as e:
-        print(f"\nAPI Error: {e}")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] API Error: {e}")
         if e.response.status_code == 401:
             print("Authentication failed. Check your credentials.")
         elif e.response.status_code == 403:
@@ -204,7 +218,7 @@ def main():
             print(f"Activity {result_id} not found.")
         sys.exit(1)
     except Exception as e:
-        print(f"\nUnexpected error: {e}")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Unexpected error: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
