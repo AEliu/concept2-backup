@@ -27,20 +27,11 @@ export default {
 
       console.log(`[${new Date().toISOString()}] Received webhook:`, JSON.stringify(webhookData, null, 2));
 
-      // Check if data wrapper exists (Concept2 webhook format)
-      if (!webhookData.data) {
-        console.error(`[${new Date().toISOString()}] Invalid webhook format: missing 'data' wrapper`);
-        return new Response(
-          JSON.stringify({ error: 'Invalid webhook format: missing data wrapper' }),
-          {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
-      }
+      // Concept2 webhook format (actual implementation, not docs):
+      // { "type": "result-added", "result": { "id": 123, ... } }
+      // NOT: { "data": { "type": "result-added", ... } }
 
-      const eventData = webhookData.data;
-      const eventType = eventData.type;
+      const eventType = webhookData.type;
 
       console.log(`[${new Date().toISOString()}] Event type: ${eventType}`);
 
@@ -48,8 +39,8 @@ export default {
 
       // Handle different event types
       if (eventType === 'result-added' || eventType === 'result-updated') {
-        // For added/updated events, result is in eventData.result
-        if (!eventData.result || !eventData.result.id) {
+        // For added/updated events, result is in webhookData.result
+        if (!webhookData.result || !webhookData.result.id) {
           console.error(`[${new Date().toISOString()}] Missing result.id in ${eventType} event`);
           return new Response(
             JSON.stringify({ error: `Missing result.id in ${eventType} event` }),
@@ -59,12 +50,12 @@ export default {
             }
           );
         }
-        resultId = eventData.result.id;
+        resultId = webhookData.result.id;
         console.log(`[${new Date().toISOString()}] Processing ${eventType} for result_id: ${resultId}`);
 
       } else if (eventType === 'result-deleted') {
-        // For deleted events, result_id is directly in eventData
-        if (!eventData.result_id) {
+        // For deleted events, result_id is directly in webhookData
+        if (!webhookData.result_id) {
           console.error(`[${new Date().toISOString()}] Missing result_id in ${eventType} event`);
           return new Response(
             JSON.stringify({ error: `Missing result_id in ${eventType} event` }),
@@ -74,7 +65,7 @@ export default {
             }
           );
         }
-        resultId = eventData.result_id;
+        resultId = webhookData.result_id;
         console.log(`[${new Date().toISOString()}] Processing ${eventType} for result_id: ${resultId}`);
         // Note: We still trigger the workflow for deletion events
         // The workflow can decide how to handle it (e.g., delete the file)
