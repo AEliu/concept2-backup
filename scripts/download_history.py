@@ -11,7 +11,7 @@ Prerequisites:
     - C2_REFRESH_TOKEN
 
 Usage:
-    python download_history.py
+    pdm run python download_history.py
 
 The script will:
     1. Use the refresh token to get an access token

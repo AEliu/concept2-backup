@@ -6,7 +6,7 @@ This script helps you obtain OAuth2 tokens for the Concept2 Logbook API.
 It uses the Authorization Code flow with a local redirect URI.
 
 Usage:
-    python auth.py
+    pdm run python auth.py
     # Then enter your Client ID and Client Secret when prompted
 
 API Documentation:
