@@ -103,7 +103,8 @@ export default {
           'Authorization': `Bearer ${githubPat}`,
           'Accept': 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'User-Agent': 'Concept2-Webhook-Handler/1.0'
         },
         body: JSON.stringify({
           event_type: 'c2_new_activity',
