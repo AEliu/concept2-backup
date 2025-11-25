@@ -9,24 +9,24 @@ Prerequisites:
     - C2_ACCESS_TOKEN (your Concept2 Logbook API Access Token)
 
 Usage:
-    pdm run python download_history.py
+    uv run download_history.py
 
 The script will:
-    1. Use the refresh token to get an access token
+    1. Use the token to authenticate
     2. Fetch all pages of workout results
     3. Download missing TCX files to data/{Year}/{Date}_{ID}.tcx
 """
 
 import os
 import sys
-import requests
 import time
-import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
+import requests
 
 # 导入简化的认证客户端
+# 确保 simple_auth.py 在同一目录下
 from simple_auth import create_simple_api_client
 
 # Configuration
@@ -126,11 +126,12 @@ def check_and_create_api_client():
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 初始化失败: {e}")
         return None
 
+
 def main():
     """Main download workflow"""
     print("=== Concept2 Workout History Downloader ===\n")
 
-    # 智能检查并创建API客户端
+    # 1. 初始化客户端
     api = check_and_create_api_client()
     if not api:
         sys.exit(1)
@@ -138,72 +139,77 @@ def main():
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ API客户端初始化成功")
 
     # Ensure data directory exists
-    data_dir = Path(__file__).parent.parent / 'data'
+    # scripts/../data -> root/data
+    data_dir = Path(__file__).resolve().parent.parent / 'data'
     data_dir.mkdir(exist_ok=True)
 
-    # Get all results
-    results = api.get_all_results()
+    try:
+        # 2. 获取所有结果列表
+        results = api.get_all_results()
 
-    if not results:
-        print("No workout results found.")
-        sys.exit(0)
+        if not results:
+            print("No workout results found.")
+            sys.exit(0)
 
-    # Process results
-    print("\nProcessing results...")
-    downloaded = 0
-    skipped = 0
-    errors = 0
+        # 3. 处理结果并下载
+        print("\nProcessing results...")
+        downloaded = 0
+        skipped = 0
+        errors = 0
 
-    for idx, result in enumerate(results, 1):
-        result_id = result['id']
-        workout_date = get_workout_date(result) or 'unknown date'
+        for idx, result in enumerate(results, 1):
+            result_id = result['id']
+            workout_date = get_workout_date(result) or 'unknown date'
 
-        # Check if file already exists
-        if tcx_file_exists(data_dir, result):
-            print(f"[{idx}/{len(results)}] Skipping ID {result_id} ({workout_date}) - already exists")
-            skipped += 1
-            continue
+            # Check if file already exists
+            if tcx_file_exists(data_dir, result):
+                print(f"[{idx}/{len(results)}] Skipping ID {result_id} ({workout_date}) - already exists")
+                skipped += 1
+                continue
 
-        # Download TCX file
-        print(f"[{idx}/{len(results)}] Downloading ID {result_id} ({workout_date})...", end=' ', flush=True)
+            # Download TCX file
+            print(f"[{idx}/{len(results)}] Downloading ID {result_id} ({workout_date})...", end=' ', flush=True)
 
-        try:
-            tcx_content = api.download_tcx(result_id)
-            file_path = save_tcx_file(data_dir, result, tcx_content)
-            print(f"saved to {file_path.relative_to(data_dir.parent)}")
-            downloaded += 1
+            try:
+                tcx_content = api.download_tcx(result_id)
+                file_path = save_tcx_file(data_dir, result, tcx_content)
+                # print relative path for cleaner output
+                rel_path = file_path.relative_to(data_dir.parent)
+                print(f"saved to {rel_path}")
+                downloaded += 1
 
-            # Be polite to the API
-            time.sleep(REQUEST_DELAY)
+                # Be polite to the API
+                time.sleep(REQUEST_DELAY)
 
-        except Exception as e:
-            print(f"ERROR: {e}")
-            errors += 1
+            except Exception as e:
+                print(f"ERROR: {e}")
+                errors += 1
 
-    # Summary
-    print("\n" + "="*60)
-    print("Download Complete!")
-    print("="*60)
-    print(f"Total results: {len(results)}")
-    print(f"Downloaded: {downloaded}")
-    print(f"Skipped (already exists): {skipped}")
-    print(f"Errors: {errors}")
-    print(f"\nFiles saved to: {data_dir}")
+        # Summary
+        print("\n" + "="*60)
+        print("Download Complete!")
+        print("="*60)
+        print(f"Total results: {len(results)}")
+        print(f"Downloaded: {downloaded}")
+        print(f"Skipped (already exists): {skipped}")
+        print(f"Errors: {errors}")
+        print(f"\nFiles saved to: {data_dir}")
 
-    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 下载完成！")
+        print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 下载完成！")
 
-except requests.exceptions.HTTPError as e:
-    print(f"\nAPI Error: {e}")
-    if e.response.status_code == 401:
-        print("Authentication failed. Check your credentials.")
-    elif e.response.status_code == 403:
-        print("Access forbidden. Check your API permissions.")
-    sys.exit(1)
-except Exception as e:
-    print(f"\nUnexpected error: {e}")
-    import traceback
-    traceback.print_exc()
-    sys.exit(1)
+    # 4. 错误处理 (Correctly indented inside main or wrapping the logic)
+    except requests.exceptions.HTTPError as e:
+        print(f"\nAPI Error: {e}")
+        if e.response.status_code == 401:
+            print("Authentication failed. Check your credentials.")
+        elif e.response.status_code == 403:
+            print("Access forbidden. Check your API permissions.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\nUnexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == '__main__':
