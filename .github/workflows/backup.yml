@@ -1,7 +1,6 @@
 name: Backup Concept2 Activities
 
 on:
-  # Manual trigger with options
   workflow_dispatch:
     inputs:
       mode:
@@ -17,7 +16,6 @@ on:
         required: false
         type: string
 
-  # Triggered by Cloudflare Worker for new activities
   repository_dispatch:
     types: [c2_new_activity]
 
@@ -29,84 +27,76 @@ jobs:
       contents: write
 
     steps:
-      # 1. Checkout the repository
+      # 1. Checkout 代码
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # Fetch all history so we can push back
           fetch-depth: 0
 
-      # 2. Setup Python
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      # 2. 安装 uv (这一步会自动处理 Python 环境，速度极快)
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
-          python-version: '3.13'
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "scripts/uv.lock"
 
-      # 3. Install PDM
-      - name: Install PDM
+      # 3. 设置 Python 并安装依赖
+      - name: Set up Python & Install dependencies
+        working-directory: scripts
         run: |
-          python -m pip install --upgrade pip
-          pip install pdm
+          # 指定 Python 版本并同步依赖
+          uv python install 3.13
+          uv sync --all-extras --dev
 
-      # 4. Install dependencies
-      - name: Install dependencies
-        run: |
-          cd scripts
-          pdm install
-
-      # 5. Set environment variables from secrets
+      # 4. 配置环境变量
       - name: Configure environment
         env:
           C2_ACCESS_TOKEN: ${{ secrets.C2_ACCESS_TOKEN }}
         run: |
           echo "C2_ACCESS_TOKEN=${C2_ACCESS_TOKEN}" >> $GITHUB_ENV
 
-      # 6. Validate authentication
+      # 5. 验证 Token
       - name: Validate Concept2 Access Token
-        run: |
-          cd scripts
-          pdm run python simple_auth.py
+        working-directory: scripts
+        run: uv run simple_auth.py
 
-      # 7. Download based on trigger type
+      # 6. 下载数据 (根据触发类型)
       - name: Download single activity (repository dispatch)
         if: github.event_name == 'repository_dispatch'
+        working-directory: scripts
         run: |
           RESULT_ID=${{ github.event.client_payload.result_id }}
           echo "Downloading activity with result_id: $RESULT_ID"
-          cd scripts
-          pdm run python download_single.py $RESULT_ID
+          uv run download_single.py $RESULT_ID
 
       - name: Download single activity (manual trigger)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'single' && github.event.inputs.result_id != ''
+        working-directory: scripts
         run: |
           RESULT_ID=${{ github.event.inputs.result_id }}
           echo "Downloading activity with result_id: $RESULT_ID"
-          cd scripts
-          pdm run python download_single.py $RESULT_ID
+          uv run download_single.py $RESULT_ID
 
       - name: Download full history (manual trigger)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'full'
+        working-directory: scripts
         run: |
           echo "Downloading full workout history..."
-          cd scripts
-          pdm run python download_history.py
+          uv run download_history.py
 
-      # --- NEW STEP START: Generate Heatmap ---
-      # 插入在下载完成后，检测变动之前
+      # 7. 生成热力图 (Generate Heatmap)
       - name: Generate Activity Heatmap
+        working-directory: scripts
         run: |
-          cd scripts
-          # 确保安装了绘图库 (使用 pip 快速安装到当前环境，防止 pdm.lock 未更新)
-          pdm run pip install july matplotlib
-          # 运行生成脚本
-          pdm run python update_heatmap.py
-      # --- NEW STEP END ---
+          # 只要你的 uv.lock 里包含了 july 和 matplotlib，直接 run 即可
+          # 如果不想依赖 lock 文件，也可以用临时命令: uv run --with july --with matplotlib update_heatmap.py
+          uv run update_heatmap.py
 
-      # 8. Check if there are changes (Now includes heatmap png and json)
+      # 8. 检测变更 (包含 .tcx, .png, .json)
       - name: Check for changes
         id: check_changes
         run: |
-          # data/ 目录下的所有变动（tcx, png, json）都会被 add
           git add -f data/
           if [ -n "$(git status --porcelain)" ]; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
@@ -115,42 +105,30 @@ jobs:
             echo "No new activities or heatmap updates to commit."
           fi
 
-      # 9. Configure git
+      # 9. 配置 Git
       - name: Configure git
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           git config --local user.email "c2-bot@users.noreply.github.com"
           git config --local user.name "C2-Bot"
 
-      # 10. Commit and push changes
+      # 10. 提交变更
       - name: Commit changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
-          # Generate commit message based on trigger type
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
             RESULT_ID=${{ github.event.client_payload.result_id }}
-            git commit -m "Add activity ${RESULT_ID} & Update heatmap
-
-            🤖 Automated backup of Concept2 activity
-
-            Co-authored-by: C2-Bot <c2-bot@users.noreply.github.com>"
+            git commit -m "Add activity ${RESULT_ID} & Update heatmap [skip ci]"
           elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             if [ "${{ github.event.inputs.mode }}" == "single" ]; then
               RESULT_ID=${{ github.event.inputs.result_id }}
-              git commit -m "Add activity ${RESULT_ID} & Update heatmap
-
-            🤖 Automated backup of Concept2 activity
-
-            Co-authored-by: C2-Bot <c2-bot@users.noreply.github.com>"
+              git commit -m "Add activity ${RESULT_ID} & Update heatmap [skip ci]"
             else
-              git commit -m "Update activity history & heatmap
-
-            🤖 Automated backup of Concept2 activity history
-
-            Co-authored-by: C2-Bot <c2-bot@users.noreply.github.com>"
+              git commit -m "Update activity history & heatmap [skip ci]"
             fi
           fi
 
+      # 11. 推送
       - name: Push changes
         if: steps.check_changes.outputs.has_changes == 'true'
         uses: ad-m/github-push-action@master
@@ -158,32 +136,15 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ github.ref }}
 
-      # 11. Summary
+      # 12. 摘要 Summary
       - name: Summary
         run: |
           echo "## Backup Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
-            RESULT_ID=${{ github.event.client_payload.result_id }}
-            echo "**Trigger:** New activity webhook" >> $GITHUB_STEP_SUMMARY
-            echo "**Activity ID:** $RESULT_ID" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "**Trigger:** Manual workflow dispatch" >> $GITHUB_STEP_SUMMARY
-            if [ "${{ github.event.inputs.mode }}" == "single" ]; then
-              echo "**Action:** Download single activity (ID: ${{ github.event.inputs.result_id }})" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "**Action:** Full history download" >> $GITHUB_STEP_SUMMARY
-            fi
-          fi
-
+          
           if [ "${{ steps.check_changes.outputs.has_changes }}" == "true" ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Status:** ✅ New activities downloaded, heatmap updated, and committed" >> $GITHUB_STEP_SUMMARY
-            # 尝试在 Summary 里直接显示生成的图片 (GitHub Actions 支持 Markdown)
-            # 注意：这里引用的是仓库里的 raw 链接，可能需要几秒钟缓存更新，或者直接引用 blob
+            echo "**Status:** ✅ Updated successfully" >> $GITHUB_STEP_SUMMARY
+            # 显示生成的图片预览
             echo "![Heatmap](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/data/profile-heatmap.png?raw=true)" >> $GITHUB_STEP_SUMMARY
           else
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Status:** ℹ️ No changes detected" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ℹ️ No changes" >> $GITHUB_STEP_SUMMARY
           fi

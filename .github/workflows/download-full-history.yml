@@ -17,45 +17,46 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2. Setup Python
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      # 2. Install uv (自动处理 Python 环境)
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
-          python-version: '3.13'
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "scripts/uv.lock"
 
-      # 3. Install PDM
-      - name: Install PDM
-        run: |
-          python -m pip install --upgrade pip
-          pip install pdm
-
-      # 4. Install dependencies
+      # 3. Install dependencies
       - name: Install dependencies
+        working-directory: scripts
         run: |
-          cd scripts
-          pdm install
+          uv python install 3.13
+          uv sync
 
-      # 5. Set environment variables from secrets
+      # 4. Configure environment
       - name: Configure environment
         env:
           C2_ACCESS_TOKEN: ${{ secrets.C2_ACCESS_TOKEN }}
         run: |
           echo "C2_ACCESS_TOKEN=${C2_ACCESS_TOKEN}" >> $GITHUB_ENV
 
-      # 6. Validate authentication
+      # 5. Validate authentication
       - name: Validate Concept2 Access Token
-        run: |
-          cd scripts
-          pdm run python simple_auth.py
+        working-directory: scripts
+        run: uv run simple_auth.py
 
-      # 7. Download full history
+      # 6. Download full history
       - name: Download full workout history
+        working-directory: scripts
         run: |
           echo "Downloading full workout history..."
-          cd scripts
-          pdm run python download_history.py
+          uv run download_history.py
 
-      # 8. Check if there are changes
+      # 7. Generate Heatmap (新增步骤：下载完历史当然要重新画图)
+      - name: Generate Activity Heatmap
+        working-directory: scripts
+        run: uv run update_heatmap.py
+
+      # 8. Check for changes (会检测到 data/ 下的新 tcx, json 和 png)
       - name: Check for changes
         id: check_changes
         run: |
@@ -78,7 +79,7 @@ jobs:
       - name: Commit changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
-          git commit -m "Update activity history
+          git commit -m "Update full history & heatmap
 
           🤖 Automated backup of Concept2 activity history
 
@@ -100,7 +101,9 @@ jobs:
 
           if [ "${{ steps.check_changes.outputs.has_changes }}" == "true" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Status:** ✅ New activities downloaded and committed" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ✅ New activities downloaded, heatmap updated and committed" >> $GITHUB_STEP_SUMMARY
+            # 显示图片
+            echo "![Heatmap](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/data/profile-heatmap.png?raw=true)" >> $GITHUB_STEP_SUMMARY
           else
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Status:** ℹ️ No new activities to download" >> $GITHUB_STEP_SUMMARY
