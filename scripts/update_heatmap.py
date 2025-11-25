@@ -44,6 +44,20 @@ def get_distance_from_tcx(filepath):
                         except: pass
         return int(total_meters)
     except: return 0
+    
+def get_intensity_level(meters):
+    """
+    根据距离(米)返回 0-4 的强度等级
+    """
+    if meters <= 0:
+        return 0
+    
+    km = meters / 1000.0
+    
+    if km < 2.0: return 1   # < 2k: 浅绿 (Level 1)
+    if km < 5.0: return 2   # 2k - 5k: 中绿 (Level 2)
+    if km < 8.0: return 3   # 5k - 8k: 深绿 (Level 3)
+    return 4                # >= 8k: 最深绿 (Level 4)
 
 # --- 主逻辑 ---
 def main():
@@ -86,7 +100,7 @@ def main():
     start_date = end_date - datetime.timedelta(days=364)
     
     dates = date_range(start_date, end_date)
-    values = [daily_distances.get(str(d), 0) / 1000.0 for d in dates]
+    values = [get_intensity_level(daily_distances.get(str(d), 0)) for d in dates]
     
 
     # 设置字体
