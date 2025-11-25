@@ -20,3 +20,8 @@ build-backend = "pdm.backend"
 
 [tool.pdm]
 distribution = true
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.6",
+]
