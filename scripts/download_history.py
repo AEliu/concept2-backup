@@ -35,10 +35,10 @@ REQUEST_DELAY = 0.5  # Delay between API requests in seconds
 
 def get_workout_date(result: Dict) -> Optional[str]:
     """Extract date from result in YYYY-MM-DD format"""
-    date_str = result.get('date')
+    date_str = result.get("date")
     if date_str:
         # Format is typically "YYYY-MM-DD"
-        return date_str.split(' ')[0] if ' ' in date_str else date_str
+        return date_str.split(" ")[0] if " " in date_str else date_str
     return None
 
 
@@ -52,12 +52,12 @@ def get_workout_year(result: Dict) -> Optional[str]:
 
 def get_tcx_filename(result: Dict) -> str:
     """Generate TCX filename from result data"""
-    result_id = result['id']
+    result_id = result["id"]
     date_str = get_workout_date(result)
 
     if date_str:
         # Replace dashes with underscores for filename
-        date_formatted = date_str.replace('-', '_')
+        date_formatted = date_str.replace("-", "_")
         return f"{date_formatted}_{result_id}.tcx"
     else:
         return f"{result_id}.tcx"
@@ -67,7 +67,7 @@ def save_tcx_file(data_dir: Path, result: Dict, tcx_content: bytes) -> Path:
     """Save TCX file to appropriate directory"""
     year = get_workout_year(result)
     if not year:
-        year = 'unknown_year'
+        year = "unknown_year"
 
     # Create year directory if it doesn't exist
     year_dir = data_dir / year
@@ -78,7 +78,7 @@ def save_tcx_file(data_dir: Path, result: Dict, tcx_content: bytes) -> Path:
     file_path = year_dir / filename
 
     # Save file
-    with open(file_path, 'wb') as f:
+    with open(file_path, "wb") as f:
         f.write(tcx_content)
 
     return file_path
@@ -110,10 +110,14 @@ def check_and_create_api_client():
 
         # 验证凭据
         if api.auth.validate_credentials():
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ Access Token验证成功")
+            print(
+                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ Access Token验证成功"
+            )
             return api
         else:
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Access Token验证失败")
+            print(
+                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Access Token验证失败"
+            )
             return None
 
     except ValueError as e:
@@ -140,7 +144,7 @@ def main():
 
     # Ensure data directory exists
     # scripts/../data -> root/data
-    data_dir = Path(__file__).resolve().parent.parent / 'data'
+    data_dir = Path(__file__).resolve().parent.parent / "data"
     data_dir.mkdir(exist_ok=True)
 
     try:
@@ -158,17 +162,23 @@ def main():
         errors = 0
 
         for idx, result in enumerate(results, 1):
-            result_id = result['id']
-            workout_date = get_workout_date(result) or 'unknown date'
+            result_id = result["id"]
+            workout_date = get_workout_date(result) or "unknown date"
 
             # Check if file already exists
             if tcx_file_exists(data_dir, result):
-                print(f"[{idx}/{len(results)}] Skipping ID {result_id} ({workout_date}) - already exists")
+                print(
+                    f"[{idx}/{len(results)}] Skipping ID {result_id} ({workout_date}) - already exists"
+                )
                 skipped += 1
                 continue
 
             # Download TCX file
-            print(f"[{idx}/{len(results)}] Downloading ID {result_id} ({workout_date})...", end=' ', flush=True)
+            print(
+                f"[{idx}/{len(results)}] Downloading ID {result_id} ({workout_date})...",
+                end=" ",
+                flush=True,
+            )
 
             try:
                 tcx_content = api.download_tcx(result_id)
@@ -186,9 +196,9 @@ def main():
                 errors += 1
 
         # Summary
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("Download Complete!")
-        print("="*60)
+        print("=" * 60)
         print(f"Total results: {len(results)}")
         print(f"Downloaded: {downloaded}")
         print(f"Skipped (already exists): {skipped}")
@@ -208,9 +218,10 @@ def main():
     except Exception as e:
         print(f"\nUnexpected error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
