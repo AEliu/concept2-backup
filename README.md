@@ -1,5 +1,7 @@
 # Concept2 Backup
 
+![Concept2 Activity](./data/profile-heatmap.png)
+
 自动将您的 Concept2 划船训练数据以 TCX 文件形式备份到 GitHub。
 
 ## 功能特性
@@ -50,7 +52,7 @@ concept2-backup/
 │   ├── simple_auth.py                # 简化认证 (Access Token)
 │   ├── download_history.py           # 下载所有活动
 │   ├── download_single.py            # 下载单个活动
-│   └── pyproject.toml                # PDM 配置
+│   └── pyproject.toml                # 配置
 ├── worker/                           # Cloudflare Worker
 │   ├── src/
 │   │   └── index.js                  # Webhook 处理器
@@ -100,13 +102,13 @@ cd scripts
 export C2_ACCESS_TOKEN="your_concept2_access_token"
 
 # 测试认证
-pdm run python simple_auth.py
+uv run python simple_auth.py
 
 # 下载完整历史
-pdm run python download_history.py
+uv run python download_history.py
 
 # 下载单个活动
-pdm run python download_single.py 12345
+uv run python download_single.py 12345
 ```
 
 #### GitHub Actions
@@ -299,19 +301,19 @@ curl --request GET \
 cd scripts
 
 # 安装依赖
-pdm install
-
-# 激活虚拟环境
-pdm venv activate
+uv sync
 
 # 测试认证
-pdm run python simple_auth.py
+uv run simple_auth.py
 
 # 下载历史记录
-pdm run python download_history.py
+uv run download_history.py
 
 # 下载单个活动
-pdm run python download_single.py 12345
+uv run download_single.py 12345
+
+# 生成热力图
+uv run update_heatmap.py 
 ```
 
 **Cloudflare Worker：**
@@ -456,7 +458,7 @@ data/2025/01_15_67890.tcx
 **检查:**
 1. 查看 Actions 日志中的错误信息
 2. 确认 C2_ACCESS_TOKEN 在 Secrets 中已设置
-3. 测试 Token: `pdm run python simple_auth.py`
+3. 测试 Token: `uv run python simple_auth.py`
 4. 检查 Concept2 API 是否可用
 
 ### 问题 4: 重复文件

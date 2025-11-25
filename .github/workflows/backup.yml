@@ -91,16 +91,28 @@ jobs:
           cd scripts
           pdm run python download_history.py
 
-      # 8. Check if there are changes
+      # --- NEW STEP START: Generate Heatmap ---
+      # 插入在下载完成后，检测变动之前
+      - name: Generate Activity Heatmap
+        run: |
+          cd scripts
+          # 确保安装了绘图库 (使用 pip 快速安装到当前环境，防止 pdm.lock 未更新)
+          pdm run pip install july matplotlib
+          # 运行生成脚本
+          pdm run python update_heatmap.py
+      # --- NEW STEP END ---
+
+      # 8. Check if there are changes (Now includes heatmap png and json)
       - name: Check for changes
         id: check_changes
         run: |
+          # data/ 目录下的所有变动（tcx, png, json）都会被 add
           git add -f data/
           if [ -n "$(git status --porcelain)" ]; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
           else
             echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "No new activities to commit."
+            echo "No new activities or heatmap updates to commit."
           fi
 
       # 9. Configure git
@@ -114,12 +126,10 @@ jobs:
       - name: Commit changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
-          
-
           # Generate commit message based on trigger type
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
             RESULT_ID=${{ github.event.client_payload.result_id }}
-            git commit -m "Add activity ${RESULT_ID}
+            git commit -m "Add activity ${RESULT_ID} & Update heatmap
 
             🤖 Automated backup of Concept2 activity
 
@@ -127,13 +137,13 @@ jobs:
           elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             if [ "${{ github.event.inputs.mode }}" == "single" ]; then
               RESULT_ID=${{ github.event.inputs.result_id }}
-              git commit -m "Add activity ${RESULT_ID}
+              git commit -m "Add activity ${RESULT_ID} & Update heatmap
 
             🤖 Automated backup of Concept2 activity
 
             Co-authored-by: C2-Bot <c2-bot@users.noreply.github.com>"
             else
-              git commit -m "Update activity history
+              git commit -m "Update activity history & heatmap
 
             🤖 Automated backup of Concept2 activity history
 
@@ -169,8 +179,11 @@ jobs:
 
           if [ "${{ steps.check_changes.outputs.has_changes }}" == "true" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Status:** ✅ New activities downloaded and committed" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ✅ New activities downloaded, heatmap updated, and committed" >> $GITHUB_STEP_SUMMARY
+            # 尝试在 Summary 里直接显示生成的图片 (GitHub Actions 支持 Markdown)
+            # 注意：这里引用的是仓库里的 raw 链接，可能需要几秒钟缓存更新，或者直接引用 blob
+            echo "![Heatmap](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/data/profile-heatmap.png?raw=true)" >> $GITHUB_STEP_SUMMARY
           else
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Status:** ℹ️ No new activities to download" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** ℹ️ No changes detected" >> $GITHUB_STEP_SUMMARY
           fi
