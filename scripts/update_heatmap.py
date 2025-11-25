@@ -3,6 +3,7 @@ import json
 import xml.etree.ElementTree as ET
 import datetime
 import july
+from july.utils import date_range  
 import matplotlib.pyplot as plt
 import matplotlib.cbook
 import warnings
@@ -84,16 +85,9 @@ def main():
     end_date = datetime.date.today()
     start_date = end_date - datetime.timedelta(days=364)
     
-    dates = []
-    values = []
+    dates = date_range(start_date, end_date)
+    values = [daily_distances.get(str(d), 0) / 1000.0 for d in dates]
     
-    delta_days = (end_date - start_date).days
-    for i in range(delta_days + 1):
-        current_day = start_date + datetime.timedelta(days=i)
-        day_str = current_day.strftime("%Y-%m-%d")
-        dates.append(current_day)
-        meters = daily_distances.get(day_str, 0)
-        values.append(meters / 1000.0)
 
     # 设置字体
     plt.rcParams['font.family'] = 'sans-serif'
