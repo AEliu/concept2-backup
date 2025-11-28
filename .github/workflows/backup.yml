@@ -147,6 +147,7 @@ jobs:
       - name: Inject Data into Web
         run: |
           # 1. 先强制删除 web/public 下可能存在的软链接/旧文件
+          mkdir -p web/public
           rm -f web/public/stats.json
           rm -f web/public/profile-heatmap.png
           
