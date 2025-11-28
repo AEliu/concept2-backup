@@ -5,6 +5,21 @@ import { DailyDistances } from '../types';
 interface HeatmapProps {
   data: DailyDistances;
 }
+// theme.ts 或放在 Heatmap.tsx 顶部
+
+export const HEATMAP_THEME = {
+  // 单独定义的空值颜色
+  EMPTY: "#e5e5e5", 
+  
+  // 直接定义为数组，D3可以直接吃
+  // 对应: [ <2000, 2k-5k, 5k-10k, >10k ]
+  COLORS: [
+    "#E8CDCD", // Level 1
+    "#C98084", // Level 2
+    "#9E383D", // Level 3
+    "#5E0B0F"  // Level 4 (Record)
+  ]
+};
 
 export const Heatmap: React.FC<HeatmapProps> = ({ data }) => {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -37,7 +52,7 @@ export const Heatmap: React.FC<HeatmapProps> = ({ data }) => {
     // 0 -> Light Gray, High -> Black
     const colorScale = d3.scaleThreshold<number, string>()
       .domain([1, 2000, 5000, 10000]) 
-      .range(["#e5e5e5", "#a3a3a3", "#737373", "#404040", "#000000"]);
+      .range(HEATMAP_THEME.COLORS);
 
     const timeWeek = d3.timeSunday;
     const dates = d3.timeDays(oneYearAgo, today);
@@ -63,7 +78,7 @@ export const Heatmap: React.FC<HeatmapProps> = ({ data }) => {
       .attr("stroke", (d) => {
          const iso = d3.timeFormat("%Y-%m-%d")(d);
          // If no data, outline it lightly to show the grid
-         return data[iso] ? "none" : "#e5e5e5"; 
+         return data[iso] ? "none" : HEATMAP_THEME.EMPTY; 
       })
       .attr("stroke-width", 1)
       .append("title")
