@@ -128,7 +128,7 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 9
-          
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -146,11 +146,17 @@ jobs:
       # 这样 vite build 时就能打包进去
       - name: Inject Data into Web
         run: |
-          mkdir -p web/public/
-          # 复制 data 目录下的所有文件到 web/public/data
-          cp -r data/stats.json web/public/stats.json
-          # 确保图片也被复制 (上面 cp -r 应该已经包含了，这里再次确认)
-          ls -R web/public/
+          # 1. 先强制删除 web/public 下可能存在的软链接/旧文件
+          rm -f web/public/stats.json
+          rm -f web/public/profile-heatmap.png
+          
+          # 2. 再把真实的数据文件复制过去
+          # 注意：根据你之前的修改，App.tsx 读的是根目录 /stats.json
+          # 所以我们要复制到 web/public/ 根目录下，而不是 web/public/data/
+          cp data/stats.json web/public/stats.json
+          
+          # 3. 验证一下
+          ls -l web/public/
 
       - name: Build Web App
         working-directory: ./web
