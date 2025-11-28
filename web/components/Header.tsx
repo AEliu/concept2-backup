@@ -16,10 +16,10 @@ export const Header: React.FC = () => {
         
         <div className="flex flex-col items-start md:items-end gap-2">
            <div className="font-mono text-[10px] uppercase tracking-widest mb-1">
-            Data Source :: stats.json
+            Data Source :: Concept 2
            </div>
            <a 
-            href="https://github.com/chao/concept2-backup" 
+            href="https://github.com/Aeliu/concept2-backup" 
             target="_blank" 
             rel="noreferrer"
             className="group flex items-center gap-2 border border-black px-4 py-2 hover:bg-black hover:text-white transition-all duration-300"
