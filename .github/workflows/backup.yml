@@ -124,7 +124,11 @@ jobs:
       # --- 阶段四：前端构建 (Web Build) ---
       # 无论是否有数据更新，我们都重新构建并部署，以防代码本身有更新
       # 如果只想在数据变更时部署，可以在下面步骤加 if
-      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -132,10 +136,7 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: web/pnpm-lock.yaml
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+      
 
       - name: Install Web Dependencies
         working-directory: ./web
