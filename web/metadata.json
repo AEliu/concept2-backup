@@ -1,0 +1,5 @@
+{
+  "name": "Rowing Stats Visualizer",
+  "description": "A modern dashboard to visualize Concept2 rowing data, featuring GitHub-style heatmaps, streak calculation, and aggregate statistics.",
+  "requestFramePermissions": []
+}

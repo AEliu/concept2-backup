@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rowing Stats</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+      body {
+        background-color: #f3f3f1; /* Off-white / Stone-100ish */
+        color: #1a1a1a;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      .font-serif {
+        font-family: 'Playfair Display', serif;
+      }
+      .font-mono {
+        font-family: 'Space Mono', monospace;
+      }
+      /* Custom Dotted Border */
+      .border-dotted-custom {
+        background-image: linear-gradient(to right, #000 33%, rgba(255,255,255,0) 0%);
+        background-position: bottom;
+        background-size: 6px 1px;
+        background-repeat: repeat-x;
+      }
+      .border-dotted-custom-vertical {
+        background-image: linear-gradient(to bottom, #000 33%, rgba(255,255,255,0) 0%);
+        background-position: right;
+        background-size: 1px 6px;
+        background-repeat: repeat-y;
+      }
+    </style>
+
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

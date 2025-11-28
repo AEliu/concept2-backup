@@ -1,4 +1,4 @@
-name: Backup Concept2 Activities
+name: Backup Concept2 & Deploy Web
 
 on:
   workflow_dispatch:
@@ -19,21 +19,26 @@ on:
   repository_dispatch:
     types: [c2_new_activity]
 
+# 允许 GITHUB_TOKEN 修改仓库内容(git push) 和 部署 Pages
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
-  backup:
+  # Job 1: 数据更新 + 前端构建
+  backup-and-build:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-
+    outputs:
+      has_changes: ${{ steps.check_changes.outputs.has_changes }}
+    
     steps:
-      # 1. Checkout 代码
+      # --- 阶段一：准备代码与 Python 环境 ---
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2. 安装 uv (这一步会自动处理 Python 环境，速度极快)
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
@@ -41,33 +46,27 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "scripts/uv.lock"
 
-      # 3. 设置 Python 并安装依赖
       - name: Set up Python & Install dependencies
         working-directory: scripts
         run: |
-          # 指定 Python 版本并同步依赖
           uv python install 3.13
           uv sync --all-extras --dev
 
-      # 4. 配置环境变量
+      # --- 阶段二：下载数据 & 生成静态图 ---
       - name: Configure environment
         env:
           C2_ACCESS_TOKEN: ${{ secrets.C2_ACCESS_TOKEN }}
-        run: |
-          echo "C2_ACCESS_TOKEN=${C2_ACCESS_TOKEN}" >> $GITHUB_ENV
+        run: echo "C2_ACCESS_TOKEN=${C2_ACCESS_TOKEN}" >> $GITHUB_ENV
 
-      # 5. 验证 Token
       - name: Validate Concept2 Access Token
         working-directory: scripts
         run: uv run simple_auth.py
 
-      # 6. 下载数据 (根据触发类型)
       - name: Download single activity (repository dispatch)
         if: github.event_name == 'repository_dispatch'
         working-directory: scripts
         run: |
           RESULT_ID=${{ github.event.client_payload.result_id }}
-          echo "Downloading activity with result_id: $RESULT_ID"
           uv run download_single.py $RESULT_ID
 
       - name: Download single activity (manual trigger)
@@ -75,25 +74,19 @@ jobs:
         working-directory: scripts
         run: |
           RESULT_ID=${{ github.event.inputs.result_id }}
-          echo "Downloading activity with result_id: $RESULT_ID"
           uv run download_single.py $RESULT_ID
 
       - name: Download full history (manual trigger)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'full'
         working-directory: scripts
-        run: |
-          echo "Downloading full workout history..."
-          uv run download_history.py
+        run: uv run download_history.py
 
-      # 7. 生成热力图 (Generate Heatmap)
-      - name: Generate Activity Heatmap
+      # 保留 Python 生成的热力图 (用于仓库存档)
+      - name: Generate Activity Heatmap (Static)
         working-directory: scripts
-        run: |
-          # 只要你的 uv.lock 里包含了 july 和 matplotlib，直接 run 即可
-          # 如果不想依赖 lock 文件，也可以用临时命令: uv run --with july --with matplotlib update_heatmap.py
-          uv run update_heatmap.py
+        run: uv run update_heatmap.py
 
-      # 8. 检测变更 (包含 .tcx, .png, .json)
+      # --- 阶段三：Git 提交 (保存数据变更) ---
       - name: Check for changes
         id: check_changes
         run: |
@@ -102,33 +95,25 @@ jobs:
             echo "has_changes=true" >> $GITHUB_OUTPUT
           else
             echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "No new activities or heatmap updates to commit."
+            echo "No new activities or heatmap updates."
           fi
 
-      # 9. 配置 Git
       - name: Configure git
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           git config --local user.email "c2-bot@users.noreply.github.com"
           git config --local user.name "C2-Bot"
 
-      # 10. 提交变更
       - name: Commit changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
             RESULT_ID=${{ github.event.client_payload.result_id }}
             git commit -m "Add activity ${RESULT_ID} & Update heatmap [skip ci]"
-          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            if [ "${{ github.event.inputs.mode }}" == "single" ]; then
-              RESULT_ID=${{ github.event.inputs.result_id }}
-              git commit -m "Add activity ${RESULT_ID} & Update heatmap [skip ci]"
-            else
-              git commit -m "Update activity history & heatmap [skip ci]"
-            fi
+          else
+            git commit -m "Update activity history & heatmap [skip ci]"
           fi
 
-      # 11. 推送
       - name: Push changes
         if: steps.check_changes.outputs.has_changes == 'true'
         uses: ad-m/github-push-action@master
@@ -136,15 +121,73 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ github.ref }}
 
-      # 12. 摘要 Summary
-      - name: Summary
+      # --- 阶段四：前端构建 (Web Build) ---
+      # 无论是否有数据更新，我们都重新构建并部署，以防代码本身有更新
+      # 如果只想在数据变更时部署，可以在下面步骤加 if
+      
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Web Dependencies
+        working-directory: ./web
+        run: pnpm install
+
+      # 关键步骤：把最新的 data (包括刚才 Python 下载的) 复制到 web/public/data
+      # 这样 vite build 时就能打包进去
+      - name: Inject Data into Web
         run: |
-          echo "## Backup Summary" >> $GITHUB_STEP_SUMMARY
-          
+          mkdir -p web/public/
+          # 复制 data 目录下的所有文件到 web/public/data
+          cp -r data/stats.json web/public/stats.json
+          # 确保图片也被复制 (上面 cp -r 应该已经包含了，这里再次确认)
+          ls -R web/public/
+
+      - name: Build Web App
+        working-directory: ./web
+        run: pnpm build
+
+      # --- 阶段五：上传构建产物 ---
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './web/dist'
+
+      # --- 摘要 ---
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Status Summary" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.check_changes.outputs.has_changes }}" == "true" ]; then
-            echo "**Status:** ✅ Updated successfully" >> $GITHUB_STEP_SUMMARY
-            # 显示生成的图片预览
-            echo "![Heatmap](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/data/profile-heatmap.png?raw=true)" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **Data Updated:** New activities downloaded." >> $GITHUB_STEP_SUMMARY
+            echo "![Heatmap Preview](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/data/profile-heatmap.png?raw=true)" >> $GITHUB_STEP_SUMMARY
           else
-            echo "**Status:** ℹ️ No changes" >> $GITHUB_STEP_SUMMARY
+            echo "ℹ️ **Data:** No new activities." >> $GITHUB_STEP_SUMMARY
           fi
+          echo "🚀 **Deployment:** Triggered for GitHub Pages." >> $GITHUB_STEP_SUMMARY
+
+  # Job 2: 部署到 GitHub Pages
+  deploy-pages:
+    needs: backup-and-build
+    
+    permissions:
+      pages: write
+      id-token: write
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
