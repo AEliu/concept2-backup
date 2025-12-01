@@ -4,7 +4,10 @@ import { calculateDerivedStats } from './utils/statsCalculator';
 import { StatCard } from './components/StatCard';
 import { Heatmap } from './components/Heatmap';
 import { Header } from './components/Header';
+import { PWAToast } from './components/PWAToast';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
+import { usePWA } from './hooks/usePWA';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const MOCK_DATA: StatsData = {
   daily_distances: {
@@ -27,6 +30,8 @@ const App: React.FC = () => {
   const [stats, setStats] = useState<DerivedStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDemoMode, setIsDemoMode] = useState(false);
+
+  const { needRefresh, offlineReady, updateServiceWorker } = usePWA();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -229,6 +234,20 @@ const App: React.FC = () => {
       <footer className="max-w-7xl mx-auto py-8 text-center font-mono text-[10px] text-gray-400 uppercase tracking-widest">
         Designed in 2025 :: Concept2 Backup Project
       </footer>
+
+      {needRefresh && (
+        <PWAToast
+          message="New version available"
+          actionLabel="Update"
+          onAction={() => updateServiceWorker(true)}
+        />
+      )}
+      {offlineReady && !needRefresh && (
+        <PWAToast
+          message="App ready to work offline"
+          onClose={() => {}}
+        />
+      )}
     </div>
   );
 };
