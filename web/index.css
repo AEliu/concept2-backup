@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+/* 在这里配置字体变量 */
+@theme {
+  /* 定义 font-sans (或者是 font-serif，看你想把哪个作为默认) */
+  --font-serif: "Playfair Display", serif;
+  
+  /* 定义 font-mono */
+  --font-mono: "Space Mono", monospace;
+
+  /*如果你想自定义名字，也可以这样写：
+  --font-playfair: "Playfair Display", serif;
+  */
+}
