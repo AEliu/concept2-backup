@@ -25,3 +25,5 @@ dist-ssr
 
 public/stats.json
 public/profile-heatmap.png
+
+.claude/*.txt
