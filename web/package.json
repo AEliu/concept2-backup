@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/playfair-display": "^5.2.8",
+    "@fontsource/space-mono": "^5.2.9",
     "d3": "^7.9.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
