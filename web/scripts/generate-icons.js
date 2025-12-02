@@ -6,17 +6,10 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// SVG content for the Concept2 rowing icon
+// SVG content for the bar chart icon
 const svgContent = `<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <title>Concept2 Rowing Editorial Logo</title>
-  <defs>
-    <style>
-      .editorial-stroke{fill:none;stroke:#121212;stroke-width:16;stroke-linecap:square;stroke-linejoin:miter}
-    </style>
-  </defs>
-  <path d="M80 256a176 176 0 1 1 352 0" class="editorial-stroke" stroke-dasharray="0" opacity=".9"/>
-  <path class="editorial-stroke" d="M256 56v260M226 56h60"/>
-  <path d="M-24 60h48l8 120h-64Z" style="fill:#121212" transform="translate(256 256)"/>
+  <title>Rowing Stats Visualizer</title>
+  <path d="M0 180h70v120H0zM100 0h70v300h-70zm100 60h70v240h-70zm100 140h70v100h-70z" transform="translate(66 106)" style="fill:#1a1a1a"/>
 </svg>`;
 
 // Public directory
@@ -58,21 +51,11 @@ async function generateIcons() {
 
     console.log('✓ Generated apple-touch-icon.png');
 
-    // Generate 512x512 PNG with transparent background for masked-icon
-    // Maskable icons should have safe zone in center
+    // Generate 512x512 PNG with white background for masked-icon
     const maskedSvgContent = `<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <title>Concept2 Rowing Editorial Logo - Maskable</title>
-  <defs>
-    <style>
-      .editorial-stroke{fill:none;stroke:#121212;stroke-width:16;stroke-linecap:square;stroke-linejoin:miter}
-    </style>
-  </defs>
+  <title>Rowing Stats Visualizer - Maskable</title>
   <rect width="512" height="512" fill="white"/>
-  <g transform="translate(0, 0)">
-    <path d="M80 256a176 176 0 1 1 352 0" class="editorial-stroke" stroke-dasharray="0" opacity=".9"/>
-    <path class="editorial-stroke" d="M256 56v260M226 56h60"/>
-    <path d="M-24 60h48l8 120h-64Z" style="fill:#121212" transform="translate(256 256)"/>
-  </g>
+  <path d="M0 180h70v120H0zM100 0h70v300h-70zm100 60h70v240h-70zm100 140h70v100h-70z" transform="translate(66 106)" style="fill:#1a1a1a"/>
 </svg>`;
 
     await sharp(Buffer.from(maskedSvgContent))
