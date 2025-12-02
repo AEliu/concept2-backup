@@ -90,7 +90,7 @@ export default defineConfig(({ mode }) => {
             },
             {
               urlPattern: /\/stats\.json$/i,
-              handler: 'StaleWhileRevalidate',
+              handler: 'NetworkFirst',
               options: {
                 cacheName: 'stats-data-cache',
                 expiration: {
