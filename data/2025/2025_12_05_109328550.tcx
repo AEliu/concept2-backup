@@ -1,0 +1,661 @@
+<?xml version="1.0" encoding="utf-8"?><TrainingCenterDatabase
+xsi:schemaLocation="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2 http://www.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd"
+xmlns:ns5="http://www.garmin.com/xmlschemas/ActivityGoals/v1"
+xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2"
+xmlns:ns2="http://www.garmin.com/xmlschemas/UserProfile/v2"
+xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ns4="http://www.garmin.com/xmlschemas/ProfileExtension/v1">
+<Activities>
+<Activity Sport="Other">
+  <Id>2025-12-05T07:22:01Z</Id>
+    <Lap StartTime="2025-12-05T07:22:01Z ">
+      <TotalTimeSeconds>119.1</TotalTimeSeconds>
+      <DistanceMeters>500</DistanceMeters>
+      <MaximumSpeed>5.04</MaximumSpeed>
+      <Calories>35</Calories>
+      <Intensity>Active</Intensity>
+      <TriggerMethod>Manual</TriggerMethod>
+      <Track>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:01Z</Time>
+          <DistanceMeters>2.5</DistanceMeters>
+          <Cadence>0</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts></Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:03Z</Time>
+          <DistanceMeters>10.4</DistanceMeters>
+          <Cadence>0</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>107</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:06Z</Time>
+          <DistanceMeters>22.1</DistanceMeters>
+          <Cadence>24</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>167</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:08Z</Time>
+          <DistanceMeters>30.4</DistanceMeters>
+          <Cadence>23</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>168</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:11Z</Time>
+          <DistanceMeters>43.3</DistanceMeters>
+          <Cadence>24</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>200</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:13Z</Time>
+          <DistanceMeters>52.1</DistanceMeters>
+          <Cadence>25</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>222</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:15Z</Time>
+          <DistanceMeters>61.3</DistanceMeters>
+          <Cadence>26</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>243</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:18Z</Time>
+          <DistanceMeters>75.2</DistanceMeters>
+          <Cadence>25</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>262</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:20Z</Time>
+          <DistanceMeters>84.2</DistanceMeters>
+          <Cadence>27</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>273</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:22Z</Time>
+          <DistanceMeters>93.5</DistanceMeters>
+          <Cadence>25</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>267</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:24Z</Time>
+          <DistanceMeters>103</DistanceMeters>
+          <Cadence>28</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>283</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:27Z</Time>
+          <DistanceMeters>116.8</DistanceMeters>
+          <Cadence>26</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>279</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:29Z</Time>
+          <DistanceMeters>126.1</DistanceMeters>
+          <Cadence>26</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>278</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:31Z</Time>
+          <DistanceMeters>135.6</DistanceMeters>
+          <Cadence>27</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>283</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:33Z</Time>
+          <DistanceMeters>145.1</DistanceMeters>
+          <Cadence>29</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>295</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:35Z</Time>
+          <DistanceMeters>154.7</DistanceMeters>
+          <Cadence>28</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>296</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:37Z</Time>
+          <DistanceMeters>164.4</DistanceMeters>
+          <Cadence>31</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>311</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:39Z</Time>
+          <DistanceMeters>174.2</DistanceMeters>
+          <Cadence>33</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>322</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:41Z</Time>
+          <DistanceMeters>184.3</DistanceMeters>
+          <Cadence>34</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>336</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:42Z</Time>
+          <DistanceMeters>189.3</DistanceMeters>
+          <Cadence>34</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>336</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:45Z</Time>
+          <DistanceMeters>200.2</DistanceMeters>
+          <Cadence>35</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>343</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:46Z</Time>
+          <DistanceMeters>209.2</DistanceMeters>
+          <Cadence>35</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>346</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:47Z</Time>
+          <DistanceMeters>214.3</DistanceMeters>
+          <Cadence>36</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>352</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:49Z</Time>
+          <DistanceMeters>224.3</DistanceMeters>
+          <Cadence>36</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>357</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:51Z</Time>
+          <DistanceMeters>234.5</DistanceMeters>
+          <Cadence>35</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>353</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:52Z</Time>
+          <DistanceMeters>239.7</DistanceMeters>
+          <Cadence>36</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>359</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:54Z</Time>
+          <DistanceMeters>249.6</DistanceMeters>
+          <Cadence>35</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>353</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:56Z</Time>
+          <DistanceMeters>259.6</DistanceMeters>
+          <Cadence>36</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>354</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:58Z</Time>
+          <DistanceMeters>269.7</DistanceMeters>
+          <Cadence>35</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>343</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:22:59Z</Time>
+          <DistanceMeters>274.6</DistanceMeters>
+          <Cadence>35</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>343</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:01Z</Time>
+          <DistanceMeters>284.5</DistanceMeters>
+          <Cadence>35</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>341</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:03Z</Time>
+          <DistanceMeters>294.5</DistanceMeters>
+          <Cadence>35</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>341</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:05Z</Time>
+          <DistanceMeters>300.4</DistanceMeters>
+          <Cadence>35</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>334</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:06Z</Time>
+          <DistanceMeters>308.8</DistanceMeters>
+          <Cadence>35</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>315</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:08Z</Time>
+          <DistanceMeters>317.8</DistanceMeters>
+          <Cadence>31</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>264</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:11Z</Time>
+          <DistanceMeters>330</DistanceMeters>
+          <Cadence>27</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>182</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:13Z</Time>
+          <DistanceMeters>337.7</DistanceMeters>
+          <Cadence>27</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>182</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:15Z</Time>
+          <DistanceMeters>345.2</DistanceMeters>
+          <Cadence>29</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>160</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:17Z</Time>
+          <DistanceMeters>352.7</DistanceMeters>
+          <Cadence>28</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>150</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:19Z</Time>
+          <DistanceMeters>360.1</DistanceMeters>
+          <Cadence>27</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>143</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:22Z</Time>
+          <DistanceMeters>370.8</DistanceMeters>
+          <Cadence>28</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>138</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:24Z</Time>
+          <DistanceMeters>377.8</DistanceMeters>
+          <Cadence>25</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>125</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:26Z</Time>
+          <DistanceMeters>384.9</DistanceMeters>
+          <Cadence>27</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>121</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:29Z</Time>
+          <DistanceMeters>395.6</DistanceMeters>
+          <Cadence>26</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>123</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:31Z</Time>
+          <DistanceMeters>402.7</DistanceMeters>
+          <Cadence>30</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>128</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:33Z</Time>
+          <DistanceMeters>409.7</DistanceMeters>
+          <Cadence>30</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>128</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:35Z</Time>
+          <DistanceMeters>416.6</DistanceMeters>
+          <Cadence>27</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>123</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:38Z</Time>
+          <DistanceMeters>427.2</DistanceMeters>
+          <Cadence>26</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>117</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:40Z</Time>
+          <DistanceMeters>434</DistanceMeters>
+          <Cadence>26</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>117</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:42Z</Time>
+          <DistanceMeters>440.9</DistanceMeters>
+          <Cadence>25</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>114</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:45Z</Time>
+          <DistanceMeters>451.3</DistanceMeters>
+          <Cadence>25</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>113</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:47Z</Time>
+          <DistanceMeters>458.1</DistanceMeters>
+          <Cadence>25</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>115</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:50Z</Time>
+          <DistanceMeters>468.5</DistanceMeters>
+          <Cadence>25</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>113</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:52Z</Time>
+          <DistanceMeters>475.2</DistanceMeters>
+          <Cadence>25</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>113</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:55Z</Time>
+          <DistanceMeters>485.3</DistanceMeters>
+          <Cadence>24</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>105</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+        <Trackpoint>
+          <Time>2025-12-05T07:23:57Z</Time>
+          <DistanceMeters>492.1</DistanceMeters>
+          <Cadence>22</Cadence>
+          <SensorState>Present</SensorState>
+          <Extensions>
+            <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+              <Watts>103</Watts>
+            </TPX>
+          </Extensions>
+        </Trackpoint>
+      </Track>
+    </Lap>
+  <Creator xsi:type="Device_t">
+    <Name>Concept2</Name>
+    <ProductID>5</ProductID>
+    <Version>
+      <VersionMajor>1</VersionMajor>
+      <VersionMinor>0</VersionMinor>
+      <BuildMajor>1</BuildMajor>
+      <BuildMinor>0</BuildMinor>
+    </Version>
+  </Creator>
+</Activity>
+</Activities>
+<Author xsi:type="Application_t">
+  <Name></Name>
+  <Build>
+    <Version>
+      <VersionMajor>1</VersionMajor>
+      <VersionMinor>0</VersionMinor>
+      <BuildMajor>1</BuildMajor>
+      <BuildMinor>0</BuildMinor>
+    </Version>
+  </Build>
+  <LangID>en</LangID>
+</Author>
+</TrainingCenterDatabase>
