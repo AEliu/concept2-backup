@@ -110,15 +110,30 @@ cd worker
 npm install
 wrangler login
 wrangler secret put GITHUB_PAT
+wrangler secret put WEBHOOK_SECRET
 wrangler dev --port 8787
 wrangler deploy
 ```
 
 `GITHUB_PAT` 需要有目标仓库的 Actions/contents 相关权限，以便调用 repository dispatch。
+`WEBHOOK_SECRET` 用于校验 webhook 来源。
+`WEBHOOK_RATE_LIMIT_MAX_PER_MINUTE` 可选，用于覆盖默认限流阈值（默认每 IP 每分钟 20 次）。
 
 ## Webhook 配置
 
-在 Concept2 开发者页面配置 webhook URL 为你的 Worker 地址（例如 `https://<worker>.workers.dev`）。
+推荐使用 Header 传密钥（长期使用）：
+
+```bash
+curl -X POST "https://<worker>.workers.dev/" \
+  -H "Content-Type: application/json" \
+  -H "X-Webhook-Secret: <WEBHOOK_SECRET>" \
+  -d '{"type":"result-added","result":{"id":12345}}'
+```
+
+也支持 query token（仅临时调试，不建议长期使用）：
+
+- `https://<worker>.workers.dev/?token=<WEBHOOK_SECRET>`
+- 风险：URL 容易进入日志、历史记录和截图，导致密钥泄露
 
 当前 Worker 会处理：
 
@@ -137,7 +152,7 @@ wrangler deploy
 ## 常见问题
 
 - 401 鉴权失败：检查 `C2_ACCESS_TOKEN` 是否有效
-- webhook 未触发：检查 Worker 日志（`wrangler tail`）与 `GITHUB_PAT`
+- webhook 未触发：检查 Worker 日志（`wrangler tail`）、`GITHUB_PAT` 和 `WEBHOOK_SECRET`
 - 前端没有数据：确认 `web/public/stats.json` 已注入最新数据（CI 中会自动复制）
 
 ## 相关文档

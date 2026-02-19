@@ -2,5 +2,16 @@ name = 'concept2-backup'
 main = "src/index.js"
 compatibility_date = "2025-11-21"
 
+[durable_objects]
+bindings = [
+  { name = "SECURITY_GATE", class_name = "SecurityGate" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SecurityGate"]
+
 # Environment variables (set with wrangler secret)
 # GITHUB_PAT - GitHub Personal Access Token for API access
+# WEBHOOK_SECRET - Shared secret used by webhook requests
+# WEBHOOK_RATE_LIMIT_MAX_PER_MINUTE - Optional rate limit override (default: 20)
