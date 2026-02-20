@@ -27,10 +27,6 @@ export default {
 
       console.log(`[${new Date().toISOString()}] Received webhook:`, JSON.stringify(webhookData, null, 2));
 
-      // Concept2 webhook format (actual implementation, not docs):
-      // { "type": "result-added", "result": { "id": 123, ... } }
-      // NOT: { "data": { "type": "result-added", ... } }
-
       const eventType = webhookData.type;
 
       console.log(`[${new Date().toISOString()}] Event type: ${eventType}`);
