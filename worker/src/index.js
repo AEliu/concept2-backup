@@ -18,7 +18,7 @@ export default {
     // Only allow POST requests
     if (request.method !== 'POST') {
       console.log(`[${new Date().toISOString()}] Rejected ${request.method} request`);
-      return new Response('Method not allowed', { status: 405 });
+      return new Response('<strong>Hi</strong>, Method not allowed', { status: 405 });
     }
 
     try {
