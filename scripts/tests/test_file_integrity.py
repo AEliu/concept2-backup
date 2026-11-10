@@ -220,6 +220,7 @@ class FileIntegrityTests(unittest.TestCase):
         self.assertEqual(exit_result.exception.code, 1)
         self.assertEqual(api.downloaded, [1, 2, 3, 4])
         self.assertIn("Failed result IDs: 2, 3", output.getvalue())
+        self.assertIn("Download Incomplete!", output.getvalue())
         self.assertEqual(
             (self.data_dir / "2026" / "2026_11_10_1.tcx").read_bytes(), tcx()
         )

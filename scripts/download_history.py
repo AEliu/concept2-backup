@@ -183,7 +183,7 @@ def main(api=None, data_dir: Path | None = None):
 
         # Summary
         print("\n" + "=" * 60)
-        print("Download Complete!")
+        print("Download Incomplete!" if failed_ids else "Download Complete!")
         print("=" * 60)
         print(f"Total results: {len(results)}")
         print(f"Downloaded: {downloaded}")
@@ -193,7 +193,8 @@ def main(api=None, data_dir: Path | None = None):
             print(f"Failed result IDs: {', '.join(map(str, failed_ids))}")
         print(f"\nFiles saved to: {data_dir}")
 
-        print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 下载完成！")
+        outcome = "下载未完成，存在失败项目。" if failed_ids else "下载完成！"
+        print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {outcome}")
         if failed_ids:
             sys.exit(1)
 
