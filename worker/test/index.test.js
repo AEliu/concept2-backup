@@ -66,11 +66,12 @@ for (const [type, id] of [
   ['result-added', 123], ['result-updated', 456], ['result-deleted', 789]
 ]) {
   test(`accepts documented ${type} event`, async (t) => {
-    const { deliver, dispatches } = setup(t);
+    const { deliver, dispatches, eventKeys } = setup(t);
     assert.equal((await deliver(event(type, id))).status, 200);
+    assert.match(eventKeys[0], /^[a-f0-9]{64}$/);
     assert.deepEqual(dispatches, [{
       event_type: 'c2_new_activity',
-      client_payload: { result_id: id, event_type: type }
+      client_payload: { result_id: id, event_type: type, event_digest: eventKeys[0] }
     }]);
   });
 }
@@ -230,4 +231,41 @@ test('rate limiter configuration requires no Durable Object migration', () => {
   assert.match(wrangler, /name = "WEBHOOK_RATE_LIMIT"[\s\S]*?limit = 10\s+period = 60/);
   assert.match(wrangler, /name = "WEBHOOK_EVENT_LIMIT"[\s\S]*?limit = 1\s+period = 60/);
   assert.doesNotMatch(wrangler, /durable_objects|migrations|WebhookGate/);
+});
+
+test('repository dispatch is serialized by digest and manual runs use run ID', () => {
+  assert.match(workflow, /concurrency:\s+group: c2-\$\{\{ github\.event_name == 'repository_dispatch' && github\.event\.client_payload\.event_digest \|\| github\.run_id \}\}\s+cancel-in-progress: false\s+queue: max/);
+});
+
+test('preflight validates digest through env and fails closed on artifact API errors', () => {
+  const preflight = workflow.split('  webhook-preflight:')[1].split('  backup-and-build:')[0];
+  assert.match(preflight, /EVENT_DIGEST: \$\{\{ github\.event\.client_payload\.event_digest \}\}/);
+  assert.match(preflight, /\[\[ "\$EVENT_DIGEST" =~ \^\[a-f0-9\]\{64\}\$ \]\]/);
+  assert.match(preflight, /set -euo pipefail/);
+  assert.match(preflight, /GH_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.match(preflight, /gh api --paginate/);
+  assert.match(preflight, /select\(\.name == \$marker\)/);
+  assert.match(preflight, /elif \.expired then empty/);
+  assert.match(preflight, /\.conclusion == "success"/);
+  assert.doesNotMatch(preflight.slice(preflight.indexOf('        run: |')), /\$\{\{/);
+});
+
+test('duplicate dispatch skips backup, build, and deployment while manual runs proceed', () => {
+  const backup = workflow.split('  backup-and-build:')[1].split('  deploy-pages:')[0];
+  const deploy = workflow.split('  deploy-pages:')[1].split('  mark-webhook-complete:')[0];
+  assert.match(backup, /needs: webhook-preflight/);
+  assert.match(backup, /always\(\).*github\.event_name == 'workflow_dispatch'/);
+  assert.match(backup, /needs\.webhook-preflight\.result == 'success' && needs\.webhook-preflight\.outputs\.duplicate == 'false'/);
+  assert.match(deploy, /needs: backup-and-build/);
+});
+
+test('only a successful deployment can upload a one-day completion marker', () => {
+  const marker = workflow.split('  mark-webhook-complete:')[1];
+  assert.match(marker, /needs: \[webhook-preflight, backup-and-build, deploy-pages\]/);
+  assert.match(marker, /needs\.backup-and-build\.result == 'success' && needs\.deploy-pages\.result == 'success'/);
+  assert.match(marker, /uses: actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/);
+  assert.match(marker, /name: \$\{\{ needs\.webhook-preflight\.outputs\.marker_name \}\}/);
+  assert.match(marker, /retention-days: 1/);
+  assert.match(marker, /if-no-files-found: error/);
+  assert.match(marker, /overwrite: false/);
 });

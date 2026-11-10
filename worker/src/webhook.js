@@ -137,7 +137,11 @@ export default {
         },
         body: JSON.stringify({
           event_type: 'c2_new_activity',
-          client_payload: { result_id: event.resultId, event_type: event.eventType }
+          client_payload: {
+            result_id: event.resultId,
+            event_type: event.eventType,
+            event_digest: digest
+          }
         }),
         signal: AbortSignal.timeout(10_000)
       });
