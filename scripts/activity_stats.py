@@ -70,24 +70,45 @@ def tcx_distance(content: bytes) -> int:
         root = ET.fromstring(content)
     except ET.ParseError as exc:
         raise ValueError("Invalid TCX XML") from exc
-    if root.tag.rsplit("}", 1)[-1] != "TrainingCenterDatabase":
+
+    def local_name(element: ET.Element) -> str:
+        return element.tag.rsplit("}", 1)[-1]
+
+    if local_name(root) != "TrainingCenterDatabase":
         raise ValueError("Not a TrainingCenterDatabase document")
 
+    groups = [child for child in root if local_name(child) == "Activities"]
+    if not groups:
+        raise ValueError("TCX has no activities")
+    activities = []
+    laps = []
+    for group in groups:
+        group_activities = [child for child in group if local_name(child) == "Activity"]
+        if not group_activities:
+            raise ValueError("TCX has an empty activities group")
+        for activity in group_activities:
+            activity_laps = [child for child in activity if local_name(child) == "Lap"]
+            if not activity_laps:
+                raise ValueError("TCX has an empty activity")
+            laps.extend(activity_laps)
+        activities.extend(group_activities)
+    if len(activities) != sum(local_name(node) == "Activity" for node in root.iter()):
+        raise ValueError("TCX has an activity outside Activities")
+    if len(laps) != sum(local_name(node) == "Lap" for node in root.iter()):
+        raise ValueError("TCX has a lap outside an activity")
+
     distances = []
-    for lap in root.iter():
-        if lap.tag.rsplit("}", 1)[-1] != "Lap":
-            continue
-        for child in lap:
-            if child.tag.rsplit("}", 1)[-1] == "DistanceMeters":
-                try:
-                    value = float(child.text)
-                except (TypeError, ValueError) as exc:
-                    raise ValueError("Invalid TCX lap distance") from exc
-                if not math.isfinite(value) or value < 0:
-                    raise ValueError("Invalid TCX lap distance")
-                distances.append(value)
-    if not distances:
-        raise ValueError("TCX has no lap distance")
+    for lap in laps:
+        fields = [child for child in lap if local_name(child) == "DistanceMeters"]
+        if len(fields) != 1:
+            raise ValueError("TCX lap needs one distance")
+        try:
+            value = float(fields[0].text)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Invalid TCX lap distance") from exc
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("Invalid TCX lap distance")
+        distances.append(value)
     return int(sum(distances))
 
 

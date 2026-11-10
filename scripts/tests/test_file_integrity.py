@@ -59,6 +59,14 @@ class FileIntegrityTests(unittest.TestCase):
                     list(self.path.parent.glob(".2026_11_10_123.tcx.*")), []
                 )
 
+    def test_namespaced_workout_structure_is_accepted(self):
+        namespaced = (
+            b'<TrainingCenterDatabase xmlns="urn:garmin:tcx">'
+            b"<Activities><Activity><Lap><DistanceMeters>1200</DistanceMeters>"
+            b"</Lap></Activity></Activities></TrainingCenterDatabase>"
+        )
+        self.assertEqual(activity_stats.tcx_distance(namespaced), 1200)
+
     def test_invalid_xml_and_distance_never_replace_existing_file(self):
         self.path.parent.mkdir()
         self.path.write_bytes(tcx())
@@ -68,6 +76,11 @@ class FileIntegrityTests(unittest.TestCase):
                 tcx("NaN"),
                 tcx("-1"),
                 b"<TrainingCenterDatabase/>",
+                b"<TrainingCenterDatabase><Lap><DistanceMeters>1000</DistanceMeters></Lap></TrainingCenterDatabase>",
+                b"<TrainingCenterDatabase><Activities><Activity/></Activities></TrainingCenterDatabase>",
+                b"<TrainingCenterDatabase><Activities><Activity><Track><Lap><DistanceMeters>1000</DistanceMeters></Lap></Track></Activity></Activities></TrainingCenterDatabase>",
+                b"<TrainingCenterDatabase><Activities><Activity><Lap/></Activity></Activities></TrainingCenterDatabase>",
+                b"<TrainingCenterDatabase><Activities><Activity><Lap><DistanceMeters>1000</DistanceMeters><DistanceMeters>2000</DistanceMeters></Lap></Activity></Activities></TrainingCenterDatabase>",
             ):
                 with self.subTest(save=save.__module__, content=content):
                     with self.assertRaises(ValueError):
@@ -226,6 +239,120 @@ class FileIntegrityTests(unittest.TestCase):
         self.assertEqual(api.downloaded, [1, 2])
         self.assertIn("Errors: 0", output.getvalue())
         self.assertNotIn("Failed result IDs:", output.getvalue())
+
+    def test_full_history_date_change_removes_old_result_and_old_day_stats(self):
+        old = self.data_dir / "2025" / "2025_12_31_123.tcx"
+        old.parent.mkdir()
+        old.write_bytes(tcx("1000"))
+        stats_path = self.data_dir / "stats.json"
+        stats_path.write_text(
+            json.dumps(
+                {"daily_distances": {"2025-12-31": 1000}, "processed_files": [old.name]}
+            ),
+            encoding="utf-8",
+        )
+        api = FakeAPI({123: tcx("1500")})
+        with patch.object(download_history.time, "sleep"):
+            downloaded, skipped, failed = download_history.download_results(
+                api, self.data_dir, [self.result]
+            )
+
+        self.assertEqual((downloaded, skipped, failed), (1, 0, []))
+        self.assertFalse(old.exists())
+        self.assertEqual(self.path.read_bytes(), tcx("1500"))
+        stats = json.loads(stats_path.read_text())
+        self.assertEqual(stats["daily_distances"], {"2026-11-10": 1500})
+        self.assertEqual(stats["processed_files"], [self.path.name])
+
+    def test_full_history_reconciles_multiple_old_paths_for_one_result(self):
+        first = self.data_dir / "2024" / "2024_01_01_123.tcx"
+        second = self.data_dir / "2025" / "2025_02_02_123.tcx"
+        for path, content in ((first, tcx("1000")), (second, tcx("2000"))):
+            path.parent.mkdir()
+            path.write_bytes(content)
+        stats_path = self.data_dir / "stats.json"
+        stats_path.write_text(
+            json.dumps(
+                {
+                    "daily_distances": {"2024-01-01": 1000, "2025-02-02": 2000},
+                    "processed_files": [first.name, second.name],
+                }
+            ),
+            encoding="utf-8",
+        )
+        api = FakeAPI({123: tcx("3000")})
+        with patch.object(download_history.time, "sleep"):
+            downloaded, skipped, failed = download_history.download_results(
+                api, self.data_dir, [self.result]
+            )
+
+        self.assertEqual((downloaded, skipped, failed), (1, 0, []))
+        self.assertFalse(first.exists())
+        self.assertFalse(second.exists())
+        self.assertEqual(self.path.read_bytes(), tcx("3000"))
+        stats = json.loads(stats_path.read_text())
+        self.assertEqual(stats["daily_distances"], {"2026-11-10": 3000})
+        self.assertEqual(stats["processed_files"], [self.path.name])
+
+    def test_full_history_update_failure_rolls_back_then_attempts_next_result(self):
+        old = self.data_dir / "2025" / "2025_12_31_123.tcx"
+        old.parent.mkdir()
+        old.write_bytes(tcx("1000"))
+        stats_path = self.data_dir / "stats.json"
+        previous_stats = json.dumps(
+            {
+                "daily_distances": {"2025-12-31": 1000},
+                "processed_files": [old.name],
+            }
+        ).encode()
+        stats_path.write_bytes(previous_stats)
+        api = FakeAPI({123: tcx("1500"), 124: tcx("2000")})
+        results = [self.result, {"id": 124, "date": "2026-11-10"}]
+        with (
+            patch("download_single.refresh_dates", side_effect=OSError("stats failed")),
+            patch.object(download_history.time, "sleep"),
+        ):
+            downloaded, skipped, failed = download_history.download_results(
+                api, self.data_dir, results
+            )
+
+        self.assertEqual((downloaded, skipped, failed), (1, 0, [123]))
+        self.assertEqual(api.downloaded, [123, 124])
+        self.assertEqual(old.read_bytes(), tcx("1000"))
+        self.assertFalse(self.path.exists())
+        self.assertEqual(stats_path.read_bytes(), previous_stats)
+        self.assertEqual(
+            (self.data_dir / "2026" / "2026_11_10_124.tcx").read_bytes(), tcx("2000")
+        )
+        self.assertEqual(list(self.data_dir.glob(".pending-update-*.json")), [])
+
+    def test_full_history_valid_target_with_stale_old_path_is_reconciled(self):
+        old = self.data_dir / "2025" / "2025_12_31_123.tcx"
+        old.parent.mkdir()
+        old.write_bytes(tcx("1000"))
+        self.path.parent.mkdir()
+        self.path.write_bytes(tcx("1500"))
+        stats_path = self.data_dir / "stats.json"
+        stats_path.write_text(
+            json.dumps(
+                {
+                    "daily_distances": {"2025-12-31": 1000, "2026-11-10": 1500},
+                    "processed_files": [old.name, self.path.name],
+                }
+            ),
+            encoding="utf-8",
+        )
+        api = FakeAPI({123: tcx("1500")})
+        with patch.object(download_history.time, "sleep"):
+            downloaded, skipped, failed = download_history.download_results(
+                api, self.data_dir, [self.result]
+            )
+
+        self.assertEqual((downloaded, skipped, failed), (1, 0, []))
+        self.assertFalse(old.exists())
+        self.assertEqual(
+            json.loads(stats_path.read_text())["daily_distances"], {"2026-11-10": 1500}
+        )
 
     def test_bad_date_cannot_write_outside_data_directory(self):
         bad_result = {"id": 123, "date": "2026-11-10/../../outside"}

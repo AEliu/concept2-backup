@@ -28,6 +28,7 @@ import requests
 # 确保 simple_auth.py 在同一目录下
 from simple_auth import create_simple_api_client
 from activity_stats import (
+    activity_id,
     activity_date,
     recover_pending_updates,
     tcx_distance,
@@ -72,6 +73,11 @@ def tcx_file_exists(data_dir: Path, result: Dict) -> bool:
 
 def download_results(api, data_dir: Path, results: list) -> tuple[int, int, list]:
     """Attempt every result and return downloaded, skipped, and failed IDs."""
+    recover_pending_updates(data_dir)
+    paths_by_id: dict[int, set[Path]] = {}
+    for path in data_dir.rglob("*.tcx"):
+        if (stored_id := activity_id(path.name)) is not None:
+            paths_by_id.setdefault(stored_id, set()).add(path)
     downloaded = 0
     skipped = 0
     failed_ids = []
@@ -83,8 +89,8 @@ def download_results(api, data_dir: Path, results: list) -> tuple[int, int, list
         try:
             workout_date = get_workout_date(result) or "unknown date"
             target = tcx_path(data_dir, result)
-            valid_existing = tcx_file_exists(data_dir, result)
-            if valid_existing:
+            prior_paths = paths_by_id.get(result_id, set())
+            if prior_paths == {target} and tcx_file_exists(data_dir, result):
                 print(
                     f"[{idx}/{len(results)}] Skipping ID {result_id} ({workout_date}) - already exists"
                 )
@@ -97,11 +103,13 @@ def download_results(api, data_dir: Path, results: list) -> tuple[int, int, list
                 flush=True,
             )
             tcx_content = api.download_tcx(result_id)
-            if target.exists() and activity_date(target.name) is not None:
-                recover_pending_updates(data_dir)
+            if prior_paths and activity_date(target.name) is not None:
                 file_path = update_tcx_file(data_dir, result, tcx_content)
+            elif prior_paths and prior_paths != {target}:
+                raise ValueError("Cannot reconcile result without a valid date")
             else:
                 file_path = save_tcx_file(data_dir, result, tcx_content)
+            paths_by_id[result_id] = {file_path}
             print(f"saved to {file_path.relative_to(data_dir.parent)}")
             downloaded += 1
             time.sleep(REQUEST_DELAY)
