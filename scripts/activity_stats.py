@@ -14,6 +14,7 @@ DATED_TCX = re.compile(
     r"(?P<year>\d{4})_(?P<month>\d{2})_(?P<day>\d{2})_(?P<id>[1-9]\d*)\.tcx"
 )
 UNDATED_TCX = re.compile(r"(?P<id>[1-9]\d*)\.tcx")
+PENDING_UPDATE = re.compile(r"\.pending-update-(?P<id>[1-9]\d*)\.json")
 
 
 def activity_id(filename: str) -> int | None:
@@ -115,3 +116,120 @@ def refresh_dates(data_dir: Path, dates: set[str]) -> None:
     write_atomically(
         stats_file, (json.dumps(stats, indent=2, sort_keys=True) + "\n").encode("utf-8")
     )
+
+
+def pending_update_path(data_dir: Path, result_id: int) -> Path:
+    """Return the journal path for one result ID."""
+    if type(result_id) is not int or result_id <= 0:
+        raise ValueError("Invalid pending result ID")
+    return data_dir / f".pending-update-{result_id}.json"
+
+
+def pending_stage_path(data_dir: Path, result_id: int) -> Path:
+    """Return the deterministic staged content path paired with a journal."""
+    return pending_update_path(data_dir, result_id).with_suffix(".stage")
+
+
+def _validated_pending_update(
+    data_dir: Path, journal_path: Path, record: object
+) -> tuple[int, Path, set[str]]:
+    """Validate a journal without trusting its filename, dates, or relative path."""
+    match = PENDING_UPDATE.fullmatch(journal_path.name)
+    if (
+        not match
+        or not isinstance(record, dict)
+        or set(record) != {"result_id", "target", "affected_dates"}
+    ):
+        raise ValueError("Invalid pending update journal")
+
+    result_id = record["result_id"]
+    if (
+        type(result_id) is not int
+        or result_id <= 0
+        or result_id != int(match.group("id"))
+    ):
+        raise ValueError("Invalid pending result ID")
+
+    dates = record["affected_dates"]
+    if not isinstance(dates, list) or not dates or len(dates) > 64:
+        raise ValueError("Invalid pending dates")
+    if any(not isinstance(value, str) for value in dates) or len(dates) != len(
+        set(dates)
+    ):
+        raise ValueError("Invalid pending dates")
+    for value in dates:
+        try:
+            if datetime.date.fromisoformat(value).isoformat() != value:
+                raise ValueError("Invalid pending date")
+        except ValueError as exc:
+            raise ValueError("Invalid pending date") from exc
+
+    relative = record["target"]
+    if not isinstance(relative, str) or "\\" in relative:
+        raise ValueError("Invalid pending target")
+    parts = relative.split("/")
+    if len(parts) != 2 or not parts[0].isdigit() or len(parts[0]) != 4:
+        raise ValueError("Invalid pending target")
+    target_date = activity_date(parts[1])
+    if (
+        target_date is None
+        or activity_id(parts[1]) != result_id
+        or parts[0] != target_date[:4]
+        or target_date not in dates
+    ):
+        raise ValueError("Invalid pending target")
+    target = data_dir / parts[0] / parts[1]
+    if not target.resolve().is_relative_to(data_dir.resolve()):
+        raise ValueError("Pending target leaves data directory")
+    return result_id, target, set(dates)
+
+
+def write_pending_update(
+    data_dir: Path, result_id: int, target: Path, dates: set[str]
+) -> Path:
+    """Record a recoverable update before changing any TCX path."""
+    journal_path = pending_update_path(data_dir, result_id)
+    record = {
+        "result_id": result_id,
+        "target": target.relative_to(data_dir).as_posix(),
+        "affected_dates": sorted(dates),
+    }
+    _validated_pending_update(data_dir, journal_path, record)
+    stage = pending_stage_path(data_dir, result_id)
+    if stage.exists() or stage.is_symlink():
+        raise ValueError("Unpaired pending update stage")
+    write_atomically(
+        journal_path, (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
+    )
+    return journal_path
+
+
+def recover_pending_updates(data_dir: Path) -> None:
+    """Finish interrupted updates before any incremental statistics scan."""
+    for journal_path in sorted(data_dir.glob(".pending-update-*.json")):
+        if journal_path.is_symlink():
+            raise ValueError("Pending update journal is a symlink")
+        with journal_path.open(encoding="utf-8") as handle:
+            record = json.load(handle)
+        result_id, target, dates = _validated_pending_update(
+            data_dir, journal_path, record
+        )
+        stage = pending_stage_path(data_dir, result_id)
+        if stage.is_symlink():
+            raise ValueError("Pending update stage is a symlink")
+
+        # A staged copy distinguishes a newly written target from a valid old
+        # file that already occupied the same path before interruption.
+        landed = False
+        if stage.exists():
+            content = stage.read_bytes()
+            tcx_distance(content)
+            landed = target.exists() and target.read_bytes() == content
+        if landed:
+            for path in data_dir.rglob("*.tcx"):
+                if path != target and activity_id(path.name) == result_id:
+                    path.unlink()
+        # If the target was never written, leave every existing copy in place.
+        refresh_dates(data_dir, dates)
+        stage.unlink(missing_ok=True)
+        journal_path.unlink()

@@ -18,8 +18,11 @@ from pathlib import Path
 from activity_stats import (
     activity_date,
     activity_id,
+    pending_stage_path,
+    recover_pending_updates,
     refresh_dates,
     tcx_distance,
+    write_pending_update,
     write_atomically,
 )
 
@@ -97,24 +100,36 @@ def update_tcx_file(data_dir: Path, result: dict, tcx_content: bytes) -> Path:
         path for path in data_dir.rglob("*.tcx") if activity_id(path.name) == result_id
     ]
     previous_content = {path: path.read_bytes() for path in previous}
+    stats_file = data_dir / "stats.json"
+    previous_stats = stats_file.read_bytes() if stats_file.exists() else None
     affected_dates = {new_date} | {
         date for path in previous if (date := activity_date(path.name)) is not None
     }
+    journal = write_pending_update(data_dir, result_id, target, affected_dates)
+    stage = pending_stage_path(data_dir, result_id)
 
     try:
+        write_atomically(stage, tcx_content)
         write_atomically(target, tcx_content)
         for path in previous:
             if path != target:
                 path.unlink()
         refresh_dates(data_dir, affected_dates)
     except Exception:
-        # stats.json is replaced atomically only after reconciliation succeeds.
-        # Restore the old TCX files if that reconciliation fails.
+        # A failed rollback leaves the journal for recovery on the next run.
         for path, content in previous_content.items():
             write_atomically(path, content)
         if target not in previous_content:
             target.unlink(missing_ok=True)
+        if previous_stats is None:
+            stats_file.unlink(missing_ok=True)
+        else:
+            write_atomically(stats_file, previous_stats)
+        stage.unlink(missing_ok=True)
+        journal.unlink()
         raise
+    stage.unlink()
+    journal.unlink()
     return target
 
 
@@ -122,6 +137,8 @@ def download_activity(
     api, data_dir: Path, result_id: int, update: bool = False
 ) -> tuple[Path, bool]:
     """Download one result; added events keep their existing skip-on-exists behavior."""
+    if update:
+        recover_pending_updates(data_dir)
     result = api.get_result_metadata(result_id)
     if not result:
         raise ValueError(f"Could not fetch metadata for result_id {result_id}")

@@ -8,6 +8,9 @@ from july.utils import date_range
 import matplotlib.pyplot as plt
 import matplotlib.cbook
 import warnings
+from pathlib import Path
+
+from activity_stats import recover_pending_updates
 
 # --- 1. 兼容性补丁 ---
 if not hasattr(matplotlib.cbook, "MatplotlibDeprecationWarning"):
@@ -30,7 +33,7 @@ def load_stats():
         try:
             with open(STATS_FILE, "r") as f:
                 return json.load(f)
-        except:
+        except Exception:
             pass
     return {"processed_files": [], "daily_distances": {}}
 
@@ -51,14 +54,15 @@ def get_distance_from_tcx(filepath):
                     if child.tag.endswith("DistanceMeters"):
                         try:
                             total_meters += float(child.text)
-                        except:
+                        except Exception:
                             pass
         return int(total_meters)
-    except:
+    except Exception:
         return 0
 
 
 def main():
+    recover_pending_updates(Path(DATA_DIR))
     stats = load_stats()
     processed_set = set(stats["processed_files"])
     daily_distances = stats.get("daily_distances", {})
@@ -74,7 +78,7 @@ def main():
                     parts = file.split("_")
                     date_str = f"{parts[0]}-{parts[1]}-{parts[2]}"
                     datetime.datetime.strptime(date_str, "%Y-%m-%d")
-                except:
+                except Exception:
                     continue
 
                 file_path = os.path.join(root_dir, file)
