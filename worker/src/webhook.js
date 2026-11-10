@@ -1,6 +1,7 @@
 const MAX_BODY_BYTES = 64 * 1024;
 const SECRET_PATTERN = /^[A-Za-z0-9_-]{43,128}$/;
 const EVENT_TYPES = new Set(['result-added', 'result-updated', 'result-deleted']);
+const GITHUB_API_URL = 'https://api.github.com/repos/AEliu/concept2-backup/dispatches';
 
 function json(status, body, requestId, retryAfter) {
   const headers = { 'Content-Type': 'application/json', 'X-Request-Id': requestId };
@@ -89,7 +90,7 @@ export default {
     // Concept2 documents a configurable endpoint URL, but no signature or custom headers.
     // A high-entropy secret URL path is therefore the compatible authentication factor.
     if (typeof env.WEBHOOK_SECRET !== 'string' || !SECRET_PATTERN.test(env.WEBHOOK_SECRET) ||
-        !env.GITHUB_PAT || !env.WEBHOOK_GATE) {
+        !env.GITHUB_PAT || !env.WEBHOOK_RATE_LIMIT || !env.WEBHOOK_EVENT_LIMIT) {
       console.error(`Webhook ${requestId}: configuration unavailable`);
       return json(503, { error: 'Service unavailable' }, requestId);
     }
@@ -111,20 +112,42 @@ export default {
     }
 
     try {
-      const gate = env.WEBHOOK_GATE.get(env.WEBHOOK_GATE.idFromName('concept2-webhooks'));
-      const outcome = await gate.dispatch(event.eventType, event.resultId, digest);
-      console.log(`Webhook ${requestId}: ${outcome}, ${event.eventType}, result ${event.resultId}`);
-
-      if (outcome === 'accepted') {
-        return json(200, { success: true, result_id: event.resultId, event_type: event.eventType }, requestId);
+      const total = await env.WEBHOOK_RATE_LIMIT.limit({ key: 'concept2-webhooks' });
+      if (!total.success) {
+        console.log(`Webhook ${requestId}: rate limited, ${event.eventType}, result ${event.resultId}`);
+        return json(429, { error: 'Rate limit exceeded' }, requestId, 60);
       }
-      if (outcome === 'duplicate') return json(200, { success: true, duplicate: true }, requestId);
-      if (outcome === 'rate_limited') return json(429, { error: 'Rate limit exceeded' }, requestId, 60);
-      if (outcome === 'pending') return json(503, { error: 'Delivery pending' }, requestId, 10);
-      return json(502, { error: 'Dispatch failed' }, requestId);
+
+      const repeated = await env.WEBHOOK_EVENT_LIMIT.limit({ key: digest });
+      if (!repeated.success) {
+        // The limiter cannot prove whether an earlier dispatch succeeded. Ask the
+        // sender to retry after the window instead of acknowledging a lost event.
+        console.log(`Webhook ${requestId}: deferred, ${event.eventType}, result ${event.resultId}`);
+        return json(503, { error: 'Delivery deferred' }, requestId, 60);
+      }
+
+      const githubResponse = await fetch(GITHUB_API_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.GITHUB_PAT}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Concept2-Webhook-Handler/2.0'
+        },
+        body: JSON.stringify({
+          event_type: 'c2_new_activity',
+          client_payload: { result_id: event.resultId, event_type: event.eventType }
+        }),
+        signal: AbortSignal.timeout(10_000)
+      });
+      if (!githubResponse.ok) throw new Error('GitHub dispatch rejected');
+
+      console.log(`Webhook ${requestId}: accepted, ${event.eventType}, result ${event.resultId}`);
+      return json(200, { success: true, result_id: event.resultId, event_type: event.eventType }, requestId);
     } catch {
       console.error(`Webhook ${requestId}: dispatch unavailable`);
-      return json(503, { error: 'Service unavailable' }, requestId);
+      return json(503, { error: 'Dispatch unavailable' }, requestId, 60);
     }
   }
 };

@@ -4,15 +4,18 @@ compatibility_date = "2025-11-21"
 
 # Secrets (set with wrangler secret): GITHUB_PAT, WEBHOOK_SECRET
 
-[[durable_objects.bindings]]
-name = "WEBHOOK_GATE"
-class_name = "WebhookGate"
+[[ratelimits]]
+name = "WEBHOOK_RATE_LIMIT"
+namespace_id = "2026111001"
 
-# Worker Previews do not inherit production bindings. Each Preview gets isolated storage.
-[[previews.durable_objects.bindings]]
-name = "WEBHOOK_GATE"
-class_name = "WebhookGate"
+  [ratelimits.simple]
+  limit = 10
+  period = 60
 
-[[migrations]]
-tag = "v1-webhook-gate"
-new_sqlite_classes = ["WebhookGate"]
+[[ratelimits]]
+name = "WEBHOOK_EVENT_LIMIT"
+namespace_id = "2026111002"
+
+  [ratelimits.simple]
+  limit = 1
+  period = 60
