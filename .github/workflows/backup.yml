@@ -67,12 +67,17 @@ jobs:
         working-directory: scripts
         env:
           RESULT_ID: ${{ github.event.client_payload.result_id }}
+          EVENT_TYPE: ${{ github.event.client_payload.event_type }}
         run: |
           if ! [[ "$RESULT_ID" =~ ^[1-9][0-9]*$ ]]; then
             echo "Invalid result ID" >&2
             exit 1
           fi
-          uv run download_single.py "$RESULT_ID"
+          if [ "$EVENT_TYPE" = "result-updated" ]; then
+            uv run download_single.py "$RESULT_ID" --update
+          else
+            uv run download_single.py "$RESULT_ID"
+          fi
 
       - name: Download single activity (manual trigger)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'single' && github.event.inputs.result_id != ''
