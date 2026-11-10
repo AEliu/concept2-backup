@@ -8,6 +8,11 @@ compatibility_date = "2025-11-21"
 name = "WEBHOOK_GATE"
 class_name = "WebhookGate"
 
+# Worker Previews do not inherit production bindings. Each Preview gets isolated storage.
+[[previews.durable_objects.bindings]]
+name = "WEBHOOK_GATE"
+class_name = "WebhookGate"
+
 [[migrations]]
 tag = "v1-webhook-gate"
 new_sqlite_classes = ["WebhookGate"]

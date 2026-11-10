@@ -7,6 +7,7 @@ import worker from '../src/webhook.js';
 const SECRET = 'A'.repeat(43);
 const workflow = readFileSync(new URL('../../.github/workflows/backup.yml', import.meta.url), 'utf8')
   .replace(/\r\n/g, '\n');
+const wrangler = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
 
 function workflowStep(name) {
   const start = workflow.indexOf(`      - name: ${name}\n`);
@@ -176,4 +177,8 @@ test('deletion dispatch never calls Concept2 and rejects unknown event types', (
   ]) {
     assert.match(workflowStep(name), /if: github\.event_name != 'repository_dispatch' \|\| github\.event\.client_payload\.event_type != 'result-deleted'/);
   }
+});
+
+test('declares an isolated Durable Object binding for Worker Previews', () => {
+  assert.match(wrangler, /\[\[previews\.durable_objects\.bindings\]\]\s+name = "WEBHOOK_GATE"\s+class_name = "WebhookGate"/);
 });
