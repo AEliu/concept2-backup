@@ -132,13 +132,13 @@ def pending_stage_path(data_dir: Path, result_id: int) -> Path:
 
 def _validated_pending_update(
     data_dir: Path, journal_path: Path, record: object
-) -> tuple[int, Path, set[str]]:
+) -> tuple[int, Path, set[str], bool]:
     """Validate a journal without trusting its filename, dates, or relative path."""
     match = PENDING_UPDATE.fullmatch(journal_path.name)
     if (
         not match
         or not isinstance(record, dict)
-        or set(record) != {"result_id", "target", "affected_dates"}
+        or set(record) != {"result_id", "target", "affected_dates", "target_preexisted"}
     ):
         raise ValueError("Invalid pending update journal")
 
@@ -149,6 +149,10 @@ def _validated_pending_update(
         or result_id != int(match.group("id"))
     ):
         raise ValueError("Invalid pending result ID")
+
+    target_preexisted = record["target_preexisted"]
+    if type(target_preexisted) is not bool:
+        raise ValueError("Invalid pending target preexistence")
 
     dates = record["affected_dates"]
     if not isinstance(dates, list) or not dates or len(dates) > 64:
@@ -181,7 +185,7 @@ def _validated_pending_update(
     target = data_dir / parts[0] / parts[1]
     if not target.resolve().is_relative_to(data_dir.resolve()):
         raise ValueError("Pending target leaves data directory")
-    return result_id, target, set(dates)
+    return result_id, target, set(dates), target_preexisted
 
 
 def write_pending_update(
@@ -193,6 +197,7 @@ def write_pending_update(
         "result_id": result_id,
         "target": target.relative_to(data_dir).as_posix(),
         "affected_dates": sorted(dates),
+        "target_preexisted": target.exists(),
     }
     _validated_pending_update(data_dir, journal_path, record)
     stage = pending_stage_path(data_dir, result_id)
@@ -211,20 +216,24 @@ def recover_pending_updates(data_dir: Path) -> None:
             raise ValueError("Pending update journal is a symlink")
         with journal_path.open(encoding="utf-8") as handle:
             record = json.load(handle)
-        result_id, target, dates = _validated_pending_update(
+        result_id, target, dates, target_preexisted = _validated_pending_update(
             data_dir, journal_path, record
         )
         stage = pending_stage_path(data_dir, result_id)
         if stage.is_symlink():
             raise ValueError("Pending update stage is a symlink")
 
-        # A staged copy distinguishes a newly written target from a valid old
-        # file that already occupied the same path before interruption.
+        # A staged copy distinguishes our write from an old file at the same
+        # path. A previously absent target can also be created by the full
+        # history downloader between the interrupted update and recovery.
         landed = False
         if stage.exists():
             content = stage.read_bytes()
             tcx_distance(content)
             landed = target.exists() and target.read_bytes() == content
+        if not landed and not target_preexisted and target.exists():
+            tcx_distance(target.read_bytes())
+            landed = True
         if landed:
             for path in data_dir.rglob("*.tcx"):
                 if path != target and activity_id(path.name) == result_id:

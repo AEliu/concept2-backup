@@ -63,6 +63,26 @@ class ActivityUpdateTests(unittest.TestCase):
     def stage(self, result_id: int) -> Path:
         return self.data_dir / f".pending-update-{result_id}.stage"
 
+    def run_heatmap(self) -> None:
+        import update_heatmap
+
+        with (
+            patch.object(update_heatmap, "DATA_DIR", str(self.data_dir)),
+            patch.object(
+                update_heatmap, "STATS_FILE", str(self.data_dir / "stats.json")
+            ),
+            patch.object(
+                update_heatmap, "OUTPUT_IMAGE", str(self.data_dir / "heatmap.png")
+            ),
+            patch.object(
+                update_heatmap.july,
+                "heatmap",
+                return_value=SimpleNamespace(collections=[]),
+            ),
+            patch.object(update_heatmap.plt, "savefig"),
+        ):
+            update_heatmap.main()
+
     def test_distance_edit_replaces_existing_file_and_day_total(self):
         old = self.add_tcx("2026-11-09", 123, 1000)
         other = self.add_tcx("2026-11-09", 124, 500)
@@ -249,8 +269,6 @@ class ActivityUpdateTests(unittest.TestCase):
         self.assertFalse(self.journal(123).exists())
 
     def test_heatmap_startup_recovers_interrupt_after_file_replacement(self):
-        import update_heatmap
-
         old = self.add_tcx("2026-11-09", 123, 1000)
         self.set_stats({"2026-11-09": 1000}, [old])
         api = FakeAPI({"id": 123, "date": "2026-11-10"}, tcx(1500))
@@ -264,22 +282,7 @@ class ActivityUpdateTests(unittest.TestCase):
         self.assertTrue(self.stage(123).exists())
         self.assertEqual(self.stats()["daily_distances"], {"2026-11-09": 1000})
 
-        with (
-            patch.object(update_heatmap, "DATA_DIR", str(self.data_dir)),
-            patch.object(
-                update_heatmap, "STATS_FILE", str(self.data_dir / "stats.json")
-            ),
-            patch.object(
-                update_heatmap, "OUTPUT_IMAGE", str(self.data_dir / "heatmap.png")
-            ),
-            patch.object(
-                update_heatmap.july,
-                "heatmap",
-                return_value=SimpleNamespace(collections=[]),
-            ),
-            patch.object(update_heatmap.plt, "savefig"),
-        ):
-            update_heatmap.main()
+        self.run_heatmap()
 
         new = self.data_dir / "2026" / "2026_11_10_123.tcx"
         self.assertEqual(new.read_bytes(), tcx(1500))
@@ -354,6 +357,7 @@ class ActivityUpdateTests(unittest.TestCase):
                     "result_id": 123,
                     "target": "../outside.tcx",
                     "affected_dates": ["2026-11-10"],
+                    "target_preexisted": False,
                 }
             ),
             encoding="utf-8",
@@ -364,6 +368,82 @@ class ActivityUpdateTests(unittest.TestCase):
 
         self.assertEqual(outside.read_bytes(), tcx(1000))
         self.assertTrue(self.journal(123).exists())
+
+    def test_full_history_download_between_interrupt_and_heatmap_is_reconciled(self):
+        from download_history import save_tcx_file
+
+        old = self.add_tcx("2026-11-09", 123, 1000)
+        self.set_stats({"2026-11-09": 1000}, [old])
+        result = {"id": 123, "date": "2026-11-10"}
+        api = FakeAPI(result, tcx(1500))
+        with patch("download_single.write_atomically", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                download_activity(api, self.data_dir, 123, update=True)
+
+        self.assertFalse(json.loads(self.journal(123).read_text())["target_preexisted"])
+        new = save_tcx_file(self.data_dir, result, tcx(1500))
+        self.assertTrue(old.exists())
+        self.assertTrue(new.exists())
+
+        self.run_heatmap()
+
+        self.assertFalse(old.exists())
+        self.assertEqual(new.read_bytes(), tcx(1500))
+        self.assertEqual(self.stats()["daily_distances"], {"2026-11-10": 1500})
+        self.assertEqual(self.stats()["processed_files"], [new.name])
+        self.assertFalse(self.journal(123).exists())
+        self.assertFalse(self.stage(123).exists())
+
+    def test_invalid_external_target_keeps_old_file_and_journal(self):
+        old = self.add_tcx("2026-11-09", 123, 1000)
+        self.set_stats({"2026-11-09": 1000}, [old])
+        api = FakeAPI({"id": 123, "date": "2026-11-10"}, tcx(1500))
+        with patch("download_single.write_atomically", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                download_activity(api, self.data_dir, 123, update=True)
+
+        new = self.data_dir / "2026" / "2026_11_10_123.tcx"
+        new.parent.mkdir(exist_ok=True)
+        new.write_bytes(b"not TCX")
+        with self.assertRaises(ValueError):
+            recover_pending_updates(self.data_dir)
+
+        self.assertEqual(old.read_bytes(), tcx(1000))
+        self.assertEqual(self.stats()["daily_distances"], {"2026-11-09": 1000})
+        self.assertTrue(self.journal(123).exists())
+
+    def test_same_path_existing_target_is_not_mistaken_for_external_download(self):
+        old = self.add_tcx("2026-11-09", 123, 1000)
+        self.set_stats({"2026-11-09": 1000}, [old])
+        api = FakeAPI({"id": 123, "date": "2026-11-09"}, tcx(1500))
+        with patch("download_single.write_atomically", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                download_activity(api, self.data_dir, 123, update=True)
+
+        self.assertTrue(json.loads(self.journal(123).read_text())["target_preexisted"])
+        recover_pending_updates(self.data_dir)
+        self.assertEqual(old.read_bytes(), tcx(1000))
+        self.assertEqual(self.stats()["daily_distances"], {"2026-11-09": 1000})
+        self.assertFalse(self.journal(123).exists())
+
+    def test_recovery_rejects_tampered_target_preexistence_field(self):
+        valid_record = {
+            "result_id": 123,
+            "target": "2026/2026_11_10_123.tcx",
+            "affected_dates": ["2026-11-10"],
+            "target_preexisted": False,
+        }
+        for value in ("false", 0, None):
+            with self.subTest(value=value):
+                record = valid_record | {"target_preexisted": value}
+                self.journal(123).write_text(json.dumps(record), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "preexistence"):
+                    recover_pending_updates(self.data_dir)
+        missing = dict(valid_record)
+        del missing["target_preexisted"]
+        self.journal(123).write_text(json.dumps(missing), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Invalid pending update journal"):
+            recover_pending_updates(self.data_dir)
 
     def test_added_event_still_skips_existing_filename(self):
         old = self.add_tcx("2026-11-09", 123, 1000)
