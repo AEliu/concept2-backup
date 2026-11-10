@@ -13,6 +13,10 @@ const REPO_OWNER = 'AEliu';
 const REPO_NAME = 'concept2-backup';
 const GITHUB_API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/dispatches`;
 
+function isValidResultId(resultId) {
+  return Number.isSafeInteger(resultId) && resultId > 0;
+}
+
 export default {
   async fetch(request, env, ctx) {
     // Only allow POST requests
@@ -36,10 +40,10 @@ export default {
       // Handle different event types
       if (eventType === 'result-added' || eventType === 'result-updated') {
         // For added/updated events, result is in webhookData.result
-        if (!webhookData.result || !webhookData.result.id) {
-          console.error(`[${new Date().toISOString()}] Missing result.id in ${eventType} event`);
+        if (!isValidResultId(webhookData.result?.id)) {
+          console.error(`[${new Date().toISOString()}] Invalid result.id in ${eventType} event`);
           return new Response(
-            JSON.stringify({ error: `Missing result.id in ${eventType} event` }),
+            JSON.stringify({ error: `Invalid result.id in ${eventType} event` }),
             {
               status: 400,
               headers: { 'Content-Type': 'application/json' }
@@ -51,10 +55,10 @@ export default {
 
       } else if (eventType === 'result-deleted') {
         // For deleted events, result_id is directly in webhookData
-        if (!webhookData.result_id) {
-          console.error(`[${new Date().toISOString()}] Missing result_id in ${eventType} event`);
+        if (!isValidResultId(webhookData.result_id)) {
+          console.error(`[${new Date().toISOString()}] Invalid result_id in ${eventType} event`);
           return new Response(
-            JSON.stringify({ error: `Missing result_id in ${eventType} event` }),
+            JSON.stringify({ error: `Invalid result_id in ${eventType} event` }),
             {
               status: 400,
               headers: { 'Content-Type': 'application/json' }

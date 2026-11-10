@@ -65,16 +65,26 @@ jobs:
       - name: Download single activity (repository dispatch)
         if: github.event_name == 'repository_dispatch'
         working-directory: scripts
+        env:
+          RESULT_ID: ${{ github.event.client_payload.result_id }}
         run: |
-          RESULT_ID=${{ github.event.client_payload.result_id }}
-          uv run download_single.py $RESULT_ID
+          if ! [[ "$RESULT_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid result ID" >&2
+            exit 1
+          fi
+          uv run download_single.py "$RESULT_ID"
 
       - name: Download single activity (manual trigger)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'single' && github.event.inputs.result_id != ''
         working-directory: scripts
+        env:
+          RESULT_ID: ${{ github.event.inputs.result_id }}
         run: |
-          RESULT_ID=${{ github.event.inputs.result_id }}
-          uv run download_single.py $RESULT_ID
+          if ! [[ "$RESULT_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid result ID" >&2
+            exit 1
+          fi
+          uv run download_single.py "$RESULT_ID"
 
       - name: Download full history (manual trigger)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'full'
@@ -106,9 +116,10 @@ jobs:
 
       - name: Commit changes
         if: steps.check_changes.outputs.has_changes == 'true'
+        env:
+          RESULT_ID: ${{ github.event.client_payload.result_id }}
         run: |
-          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
-            RESULT_ID=${{ github.event.client_payload.result_id }}
+          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then
             git commit -m "Add activity ${RESULT_ID} & Update heatmap [skip ci]"
           else
             git commit -m "Update activity history & heatmap [skip ci]"
