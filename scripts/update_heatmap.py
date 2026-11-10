@@ -1,7 +1,6 @@
 import os
 import json
 from math import log
-import xml.etree.ElementTree as ET
 import datetime
 import july
 from july.utils import date_range
@@ -10,7 +9,7 @@ import matplotlib.cbook
 import warnings
 from pathlib import Path
 
-from activity_stats import recover_pending_updates
+from activity_stats import recover_pending_updates, tcx_distance, write_atomically
 
 # --- 1. 兼容性补丁 ---
 if not hasattr(matplotlib.cbook, "MatplotlibDeprecationWarning"):
@@ -30,35 +29,18 @@ OUTPUT_IMAGE = os.path.join(DATA_DIR, "profile-heatmap.png")
 # --- 辅助函数 ---
 def load_stats():
     if os.path.exists(STATS_FILE):
-        try:
-            with open(STATS_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
+        with open(STATS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
     return {"processed_files": [], "daily_distances": {}}
 
 
 def save_stats(stats):
-    with open(STATS_FILE, "w") as f:
-        json.dump(stats, f, indent=2, sort_keys=True)
+    content = (json.dumps(stats, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    write_atomically(Path(STATS_FILE), content)
 
 
 def get_distance_from_tcx(filepath):
-    try:
-        tree = ET.parse(filepath)
-        root = tree.getroot()
-        total_meters = 0.0
-        for elem in root.iter():
-            if elem.tag.endswith("Lap"):
-                for child in elem:
-                    if child.tag.endswith("DistanceMeters"):
-                        try:
-                            total_meters += float(child.text)
-                        except Exception:
-                            pass
-        return int(total_meters)
-    except Exception:
-        return 0
+    return tcx_distance(Path(filepath).read_bytes())
 
 
 def main():
@@ -72,6 +54,8 @@ def main():
     for root_dir, dirs, files in os.walk(DATA_DIR):
         for file in files:
             if file.endswith(".tcx"):
+                file_path = os.path.join(root_dir, file)
+                dist = get_distance_from_tcx(file_path)
                 if file in processed_set:
                     continue
                 try:
@@ -81,9 +65,7 @@ def main():
                 except Exception:
                     continue
 
-                file_path = os.path.join(root_dir, file)
                 print(f"Processing: {file}")
-                dist = get_distance_from_tcx(file_path)
                 daily_distances[date_str] = daily_distances.get(date_str, 0) + dist
                 stats["processed_files"].append(file)
                 has_updates = True

@@ -22,6 +22,7 @@ from activity_stats import (
     recover_pending_updates,
     refresh_dates,
     tcx_distance,
+    tcx_path,
     write_pending_update,
     write_atomically,
 )
@@ -38,43 +39,11 @@ def get_workout_date(result: dict) -> str:
     return None
 
 
-def get_workout_year(result: dict) -> str:
-    """Extract year from result"""
-    date_str = get_workout_date(result)
-    if date_str and len(date_str) >= 4:
-        return date_str[:4]
-    return None
-
-
-def get_tcx_filename(result: dict) -> str:
-    """Generate TCX filename from result data"""
-    result_id = result["id"]
-    date_str = get_workout_date(result)
-
-    if date_str:
-        date_formatted = date_str.replace("-", "_")
-        return f"{date_formatted}_{result_id}.tcx"
-    else:
-        return f"{result_id}.tcx"
-
-
 def save_tcx_file(data_dir: Path, result: dict, tcx_content: bytes) -> Path:
     """Save TCX file to appropriate directory"""
-    year = get_workout_year(result)
-    if not year:
-        year = "unknown_year"
-
-    # Create year directory if it doesn't exist
-    year_dir = data_dir / year
-    year_dir.mkdir(parents=True, exist_ok=True)
-
-    # Generate filename
-    filename = get_tcx_filename(result)
-    file_path = year_dir / filename
-
-    # Save file
-    with open(file_path, "wb") as f:
-        f.write(tcx_content)
+    tcx_distance(tcx_content)
+    file_path = tcx_path(data_dir, result)
+    write_atomically(file_path, tcx_content)
 
     return file_path
 
@@ -82,11 +51,7 @@ def save_tcx_file(data_dir: Path, result: dict, tcx_content: bytes) -> Path:
 def update_tcx_file(data_dir: Path, result: dict, tcx_content: bytes) -> Path:
     """Replace every stored path for this result and reconcile affected dates."""
     result_id = result["id"]
-    target = (
-        data_dir
-        / (get_workout_year(result) or "unknown_year")
-        / get_tcx_filename(result)
-    )
+    target = tcx_path(data_dir, result)
     new_date = activity_date(target.name)
     if (
         new_date is None
@@ -145,16 +110,21 @@ def download_activity(
     if result.get("id") != result_id:
         raise ValueError(f"Metadata result ID does not match {result_id}")
 
-    target = (
-        data_dir
-        / (get_workout_year(result) or "unknown_year")
-        / get_tcx_filename(result)
-    )
+    target = tcx_path(data_dir, result)
+    repairing = False
     if not update and target.exists():
-        return target, False
+        try:
+            tcx_distance(target.read_bytes())
+        except ValueError:
+            # A truncated or invalid file is not a completed backup.
+            repairing = True
+        else:
+            return target, False
 
     tcx_content = api.download_tcx(result_id)
-    if update:
+    if update or (repairing and activity_date(target.name) is not None):
+        if repairing and not update:
+            recover_pending_updates(data_dir)
         return update_tcx_file(data_dir, result, tcx_content), True
     return save_tcx_file(data_dir, result, tcx_content), True
 

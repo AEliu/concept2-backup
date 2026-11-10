@@ -36,6 +36,34 @@ def activity_date(filename: str) -> str | None:
         return None
 
 
+def tcx_path(data_dir: Path, result: dict) -> Path:
+    """Derive a backup path only from a positive ID and an ISO calendar date."""
+    result_id = result.get("id")
+    if type(result_id) is not int or result_id <= 0:
+        raise ValueError("Result has an invalid ID or date")
+    raw_date = result.get("date")
+    if raw_date is None or raw_date == "":
+        target = data_dir / "unknown_year" / f"{result_id}.tcx"
+    else:
+        if not isinstance(raw_date, str):
+            raise ValueError("Result has an invalid ID or date")
+        date_text = raw_date.split(" ", 1)[0]
+        try:
+            date = datetime.date.fromisoformat(date_text)
+        except ValueError as exc:
+            raise ValueError("Result has an invalid ID or date") from exc
+        if date.isoformat() != date_text:
+            raise ValueError("Result has an invalid ID or date")
+        target = (
+            data_dir
+            / f"{date.year:04d}"
+            / (f"{date.year:04d}_{date.month:02d}_{date.day:02d}_{result_id}.tcx")
+        )
+    if not target.resolve().is_relative_to(data_dir.resolve()):
+        raise ValueError("Result path leaves data directory")
+    return target
+
+
 def tcx_distance(content: bytes) -> int:
     """Validate a downloaded TCX and return its summed lap distance."""
     try:
