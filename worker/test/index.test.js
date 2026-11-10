@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-import worker from '../src/index.js';
+import worker from '../src/webhook.js';
 
+const SECRET = 'A'.repeat(43);
 const workflow = readFileSync(new URL('../../.github/workflows/backup.yml', import.meta.url), 'utf8')
   .replace(/\r\n/g, '\n');
 
@@ -14,79 +15,130 @@ function workflowStep(name) {
   return workflow.slice(start, end === -1 ? undefined : end);
 }
 
-async function deliver(t, payload) {
-  const dispatches = [];
-  t.mock.method(globalThis, 'fetch', async (_url, options) => {
-    dispatches.push(JSON.parse(options.body));
-    return new Response(null, { status: 204 });
-  });
-  t.mock.method(console, 'log', () => {});
-  t.mock.method(console, 'error', () => {});
-
-  const response = await worker.fetch(
-    new Request('https://example.test/webhook', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    }),
-    { GITHUB_PAT: 'test-pat' },
-    {}
-  );
-  return { response, dispatches };
+function event(type, id, extra = {}) {
+  return type === 'result-deleted'
+    ? { data: { type, result_id: id } }
+    : { data: { type, result: { id, user_id: 1, ...extra } } };
 }
 
-test('dispatches a positive integer result ID unchanged', async (t) => {
-  const { response, dispatches } = await deliver(t, {
-    type: 'result-added',
-    result: { id: 123 }
+async function deliver(t, payload, options = {}) {
+  const dispatches = [];
+  const logs = [];
+  const gate = {
+    idFromName: (name) => name,
+    get: () => ({
+      dispatch: async (...args) => {
+        dispatches.push(args);
+        return options.outcome ?? 'accepted';
+      }
+    })
+  };
+  t.mock.method(console, 'log', (...args) => logs.push(args.join(' ')));
+  t.mock.method(console, 'warn', (...args) => logs.push(args.join(' ')));
+  t.mock.method(console, 'error', (...args) => logs.push(args.join(' ')));
+
+  const env = {
+    WEBHOOK_SECRET: SECRET,
+    GITHUB_PAT: 'test-pat',
+    WEBHOOK_GATE: gate,
+    ...options.env
+  };
+  const response = await worker.fetch(
+    new Request(options.url ?? `https://example.test/webhook/${SECRET}`, {
+      method: options.method ?? 'POST',
+      body: options.body ?? JSON.stringify(payload)
+    }), env
+  );
+  return { response, dispatches, logs };
+}
+
+for (const [type, id] of [
+  ['result-added', 123], ['result-updated', 456], ['result-deleted', 789]
+]) {
+  test(`accepts the documented ${type} envelope`, async (t) => {
+    const { response, dispatches } = await deliver(t, event(type, id));
+    assert.equal(response.status, 200);
+    assert.equal(dispatches.length, 1);
+    assert.equal(dispatches[0][0], type);
+    assert.equal(dispatches[0][1], id);
+    assert.match(dispatches[0][2], /^[a-f0-9]{64}$/);
   });
+}
 
-  assert.equal(response.status, 200);
-  assert.deepEqual(dispatches, [{
-    event_type: 'c2_new_activity',
-    client_payload: { result_id: 123, event_type: 'result-added' }
-  }]);
-});
-
-test('accepts a positive integer for deleted events', async (t) => {
-  const { response, dispatches } = await deliver(t, {
-    type: 'result-deleted',
-    result_id: 456
-  });
-
-  assert.equal(response.status, 200);
-  assert.equal(dispatches[0].client_payload.result_id, 456);
-});
-
-test('accepts a positive integer for updated events', async (t) => {
-  const { response, dispatches } = await deliver(t, {
-    type: 'result-updated',
-    result: { id: 789 }
-  });
-
-  assert.equal(response.status, 200);
-  assert.equal(dispatches[0].client_payload.result_id, 789);
-});
-
-for (const id of ['$(echo injected)', '123; echo injected', '123', 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, null]) {
-  test(`rejects invalid added result ID ${JSON.stringify(id)} before dispatch`, async (t) => {
-    const { response, dispatches } = await deliver(t, {
-      type: 'result-added',
-      result: { id }
-    });
-
+for (const id of ['$(echo injected)', '123; echo injected', '123', 0, -1, 1.5,
+  Number.MAX_SAFE_INTEGER + 1, null]) {
+  test(`rejects invalid result ID ${JSON.stringify(id)} before dispatch`, async (t) => {
+    const { response, dispatches } = await deliver(t, event('result-added', id));
     assert.equal(response.status, 400);
     assert.equal(dispatches.length, 0);
   });
 }
 
-test('rejects an injected deleted result ID before dispatch', async (t) => {
-  const { response, dispatches } = await deliver(t, {
-    type: 'result-deleted',
-    result_id: '$(echo injected)'
-  });
-
+test('rejects an injected deleted result ID', async (t) => {
+  const { response, dispatches } = await deliver(t, event('result-deleted', '$(echo injected)'));
   assert.equal(response.status, 400);
   assert.equal(dispatches.length, 0);
+});
+
+test('fails closed when authentication or state binding is missing', async (t) => {
+  for (const missing of ['WEBHOOK_SECRET', 'GITHUB_PAT', 'WEBHOOK_GATE']) {
+    const { response, dispatches } = await deliver(t, event('result-added', 1), {
+      env: { [missing]: undefined }
+    });
+    assert.equal(response.status, 503);
+    assert.equal(dispatches.length, 0);
+  }
+});
+
+test('rejects a short configured secret', async (t) => {
+  const { response, dispatches } = await deliver(t, event('result-added', 1), {
+    env: { WEBHOOK_SECRET: 'guessable' }
+  });
+  assert.equal(response.status, 503);
+  assert.equal(dispatches.length, 0);
+});
+
+test('rejects wrong secret before reading the payload', async (t) => {
+  const { response, dispatches } = await deliver(t, null, {
+    url: 'https://example.test/webhook/wrong', body: '{not json'
+  });
+  assert.equal(response.status, 401);
+  assert.equal(dispatches.length, 0);
+});
+
+test('rejects an oversized event before dispatch', async (t) => {
+  const { response, dispatches } = await deliver(t, event('result-added', 1, {
+    comments: 'x'.repeat(65_536)
+  }));
+  assert.equal(response.status, 413);
+  assert.equal(dispatches.length, 0);
+});
+
+for (const payload of [
+  { type: 'result-added', result: { id: 1 } },
+  { data: { type: 'unknown', result: { id: 1 } } },
+  { data: { type: 'result-deleted', result_id: 1, result: { id: 1 } } },
+  { data: { type: 'result-added', result: { id: 1 }, result_id: 1 } },
+  { data: [] },
+  null
+]) {
+  test(`rejects malformed envelope ${JSON.stringify(payload)}`, async (t) => {
+    const { response, dispatches } = await deliver(t, payload);
+    assert.equal(response.status, 400);
+    assert.equal(dispatches.length, 0);
+  });
+}
+
+test('does not log the secret or personal webhook fields', async (t) => {
+  const privateText = 'private workout comment';
+  const { response, logs } = await deliver(t, event('result-added', 42, {
+    comments: privateText, user_id: 987654
+  }));
+  assert.equal(response.status, 200);
+  const output = logs.join('\n');
+  assert.doesNotMatch(output, /private workout comment|987654|test-pat/);
+  assert.ok(!output.includes(SECRET));
+  assert.match(output, /result-added, result 42/);
 });
 
 test('passes both untrusted workflow IDs only through environment variables', () => {

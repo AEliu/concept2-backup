@@ -1,6 +1,7 @@
 # Environment files
 .env
 .env.local
+.dev.vars*
 
 # OS files
 .DS_Store

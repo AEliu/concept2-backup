@@ -2,5 +2,12 @@ name = 'concept2-backup'
 main = "src/index.js"
 compatibility_date = "2025-11-21"
 
-# Environment variables (set with wrangler secret)
-# GITHUB_PAT - GitHub Personal Access Token for API access
+# Secrets (set with wrangler secret): GITHUB_PAT, WEBHOOK_SECRET
+
+[[durable_objects.bindings]]
+name = "WEBHOOK_GATE"
+class_name = "WebhookGate"
+
+[[migrations]]
+tag = "v1-webhook-gate"
+new_sqlite_classes = ["WebhookGate"]
