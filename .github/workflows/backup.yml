@@ -74,7 +74,7 @@ jobs:
   # Job 1: 数据更新 + 前端构建
   backup-and-build:
     needs: webhook-preflight
-    if: ${{ always() && (github.event_name == 'workflow_dispatch' || (needs.webhook-preflight.result == 'success' && needs.webhook-preflight.outputs.duplicate == 'false')) }}
+    if: ${{ always() && github.ref_type == 'branch' && (github.event_name == 'workflow_dispatch' || (needs.webhook-preflight.result == 'success' && needs.webhook-preflight.outputs.duplicate == 'false')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -86,6 +86,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ github.ref }}
           fetch-depth: 0
           persist-credentials: false
 

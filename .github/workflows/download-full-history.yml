@@ -12,6 +12,7 @@ permissions: {}
 
 jobs:
   download-history:
+    if: github.ref_type == 'branch'
     runs-on: ubuntu-latest
 
     permissions:
@@ -22,6 +23,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ github.ref }}
           fetch-depth: 0
           persist-credentials: false
 

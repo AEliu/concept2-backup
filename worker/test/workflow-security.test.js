@@ -56,6 +56,18 @@ test('checkout credentials are disabled and the write token reaches only the pus
   assert.match(pushScript, /\$\{GH_TOKEN:\?GH_TOKEN is required to push the backup\}/);
 });
 
+test('queued writers check out the current branch head instead of the event SHA', () => {
+  const lock = /concurrency:\s+group: c2-backup-\$\{\{ github\.repository \}\}-\$\{\{ github\.ref \}\}\s+cancel-in-progress: false\s+queue: max/;
+  for (const workflow of [backup, history]) {
+    assert.match(workflow, lock);
+    const checkout = namedStep(workflow, 'Checkout code');
+    assert.match(checkout, /ref: \$\{\{ github\.ref \}\}/);
+    assert.doesNotMatch(checkout, /github\.sha|GITHUB_SHA|github\.ref_name/);
+  }
+  assert.match(backup, /backup-and-build:\n    needs: webhook-preflight\n    if: \$\{\{ always\(\) && github\.ref_type == 'branch' &&/);
+  assert.match(history, /download-history:\n    if: github\.ref_type == 'branch'/);
+});
+
 test('all external actions are pinned and jobs have only their required token permissions', () => {
   for (const workflow of [backup, history]) {
     const actions = [...workflow.matchAll(/^\s+uses: ([^\s#]+)/gm)].map((match) => match[1]);
