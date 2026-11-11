@@ -10,12 +10,21 @@ Prerequisites:
     - C2_ACCESS_TOKEN (your Concept2 Logbook API Access Token)
 """
 
-import os
 import sys
 import requests
-import time
 from datetime import datetime
 from pathlib import Path
+
+from activity_stats import (
+    activity_date,
+    activity_id,
+    pending_stage_path,
+    recover_pending_updates,
+    refresh_dates,
+    tcx_distance,
+    write_pending_update,
+    write_atomically,
+)
 
 # 导入简化的认证客户端
 from simple_auth import create_simple_api_client
@@ -70,17 +79,100 @@ def save_tcx_file(data_dir: Path, result: dict, tcx_content: bytes) -> Path:
     return file_path
 
 
+def update_tcx_file(data_dir: Path, result: dict, tcx_content: bytes) -> Path:
+    """Replace every stored path for this result and reconcile affected dates."""
+    result_id = result["id"]
+    target = (
+        data_dir
+        / (get_workout_year(result) or "unknown_year")
+        / get_tcx_filename(result)
+    )
+    new_date = activity_date(target.name)
+    if (
+        new_date is None
+        or get_workout_date(result) != new_date
+        or str(result_id) != target.stem.rsplit("_", 1)[-1]
+    ):
+        raise ValueError("Updated result has an invalid ID or date")
+    tcx_distance(tcx_content)  # Do not replace a good backup with an invalid export.
+
+    previous = [
+        path for path in data_dir.rglob("*.tcx") if activity_id(path.name) == result_id
+    ]
+    previous_content = {path: path.read_bytes() for path in previous}
+    stats_file = data_dir / "stats.json"
+    previous_stats = stats_file.read_bytes() if stats_file.exists() else None
+    affected_dates = {new_date} | {
+        date for path in previous if (date := activity_date(path.name)) is not None
+    }
+    journal = write_pending_update(data_dir, result_id, target, affected_dates)
+    stage = pending_stage_path(data_dir, result_id)
+
+    try:
+        write_atomically(stage, tcx_content)
+        write_atomically(target, tcx_content)
+        for path in previous:
+            if path != target:
+                path.unlink()
+        refresh_dates(data_dir, affected_dates)
+    except Exception:
+        # A failed rollback leaves the journal for recovery on the next run.
+        for path, content in previous_content.items():
+            write_atomically(path, content)
+        if target not in previous_content:
+            target.unlink(missing_ok=True)
+        if previous_stats is None:
+            stats_file.unlink(missing_ok=True)
+        else:
+            write_atomically(stats_file, previous_stats)
+        stage.unlink(missing_ok=True)
+        journal.unlink()
+        raise
+    stage.unlink()
+    journal.unlink()
+    return target
+
+
+def download_activity(
+    api, data_dir: Path, result_id: int, update: bool = False
+) -> tuple[Path, bool]:
+    """Download one result; added events keep their existing skip-on-exists behavior."""
+    if update:
+        recover_pending_updates(data_dir)
+    result = api.get_result_metadata(result_id)
+    if not result:
+        raise ValueError(f"Could not fetch metadata for result_id {result_id}")
+    if result.get("id") != result_id:
+        raise ValueError(f"Metadata result ID does not match {result_id}")
+
+    target = (
+        data_dir
+        / (get_workout_year(result) or "unknown_year")
+        / get_tcx_filename(result)
+    )
+    if not update and target.exists():
+        return target, False
+
+    tcx_content = api.download_tcx(result_id)
+    if update:
+        return update_tcx_file(data_dir, result, tcx_content), True
+    return save_tcx_file(data_dir, result, tcx_content), True
+
+
 def main():
     """Download a single activity"""
     print(
         f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting Concept2 activity download"
     )
 
-    if len(sys.argv) < 2:
+    if len(sys.argv) not in (2, 3) or (
+        len(sys.argv) == 3 and sys.argv[2] != "--update"
+    ):
         print(
-            f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error: Usage: python download_single.py <result_id>"
+            f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error: Usage: python download_single.py <result_id> [--update]"
         )
         sys.exit(1)
+    update = len(sys.argv) == 3
 
     try:
         result_id = int(sys.argv[1])
@@ -119,49 +211,17 @@ def main():
             f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Data directory: {data_dir}"
         )
 
-        # Get metadata first
-        print(
-            f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Fetching metadata for result {result_id}..."
+        saved_path, downloaded = download_activity(
+            api, data_dir, result_id, update=update
         )
-        result = api.get_result_metadata(result_id)
-
-        if not result:
+        if not downloaded:
             print(
-                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Error: Could not fetch metadata for result_id {result_id}"
-            )
-            sys.exit(1)
-
-        print(
-            f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Successfully fetched metadata"
-        )
-
-        # Check if file already exists
-        year = get_workout_year(result) or "unknown_year"
-        year_dir = data_dir / year
-        filename = get_tcx_filename(result)
-        file_path = year_dir / filename
-
-        if file_path.exists():
-            print(
-                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] File already exists: {file_path.relative_to(data_dir.parent)}"
+                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] File already exists: {saved_path.relative_to(data_dir.parent)}"
             )
             print(
                 f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Skipping download."
             )
             sys.exit(0)
-
-        # Download TCX file
-        workout_date = get_workout_date(result) or "unknown date"
-        print(
-            f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Downloading activity from {workout_date}..."
-        )
-        tcx_content = api.download_tcx(result_id)
-        print(
-            f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Downloaded {len(tcx_content)} bytes"
-        )
-
-        # Save file
-        saved_path = save_tcx_file(data_dir, result, tcx_content)
         print(
             f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Saved to: {saved_path.relative_to(data_dir.parent)}"
         )
