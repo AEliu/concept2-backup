@@ -9,6 +9,13 @@ const workflow = readFileSync(new URL('../../.github/workflows/backup.yml', impo
   .replace(/\r\n/g, '\n');
 const wrangler = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
 
+function workflowStep(name) {
+  const start = workflow.indexOf(`      - name: ${name}\n`);
+  assert.notEqual(start, -1, `Missing workflow step: ${name}`);
+  const end = workflow.indexOf('\n      - name:', start + 1);
+  return workflow.slice(start, end === -1 ? undefined : end);
+}
+
 function event(type, id, extra = {}) {
   return type === 'result-deleted'
     ? { data: { type, result_id: id } }
