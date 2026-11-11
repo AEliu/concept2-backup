@@ -106,3 +106,22 @@ test('passes both untrusted workflow IDs only through environment variables', ()
   assert.match(commit, /git commit -m "Add activity \$\{RESULT_ID\}/);
   assert.doesNotMatch(commit.slice(commit.indexOf('        run: |')), /\$\{\{/);
 });
+
+test('deletion dispatch never calls Concept2 and rejects unknown event types', () => {
+  const dispatch = workflowStep('Download single activity (repository dispatch)');
+  assert.ok(dispatch.includes('EVENT_TYPE: ${{ github.event.client_payload.event_type }}'));
+  assert.match(dispatch, /case "\$EVENT_TYPE" in/);
+  assert.match(dispatch, /result-added\)\s+uv run download_single\.py "\$RESULT_ID"/);
+  assert.match(dispatch, /result-updated\)\s+uv run download_single\.py "\$RESULT_ID" --update/);
+  assert.match(dispatch, /result-deleted\)\s+uv run record_deleted\.py "\$RESULT_ID"/);
+  assert.match(dispatch, /\*\)\s+echo "Invalid event type" >&2\s+exit 1/);
+  assert.doesNotMatch(dispatch.slice(dispatch.indexOf('        run: |')), /\$\{\{/);
+
+  for (const name of [
+    'Configure environment',
+    'Validate Concept2 Access Token',
+    'Generate Activity Heatmap (Static)'
+  ]) {
+    assert.match(workflowStep(name), /if: github\.event_name != 'repository_dispatch' \|\| github\.event\.client_payload\.event_type != 'result-deleted'/);
+  }
+});
