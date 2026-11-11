@@ -3,8 +3,16 @@ name: Download Full History
 on:
   workflow_dispatch:
 
+concurrency:
+  group: c2-backup-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
+  queue: max
+
+permissions: {}
+
 jobs:
   download-history:
+    if: github.ref_type == 'branch'
     runs-on: ubuntu-latest
 
     permissions:
@@ -13,13 +21,15 @@ jobs:
     steps:
       # 1. Checkout the repository
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ github.ref }}
           fetch-depth: 0
+          persist-credentials: false
 
       # 2. Install uv (自动处理 Python 环境)
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
         with:
           version: "latest"
           enable-cache: true
@@ -32,31 +42,28 @@ jobs:
           uv python install 3.13
           uv sync
 
-      # 4. Configure environment
-      - name: Configure environment
-        env:
-          C2_ACCESS_TOKEN: ${{ secrets.C2_ACCESS_TOKEN }}
-        run: |
-          echo "C2_ACCESS_TOKEN=${C2_ACCESS_TOKEN}" >> $GITHUB_ENV
-
-      # 5. Validate authentication
+      # 4. Validate authentication
       - name: Validate Concept2 Access Token
         working-directory: scripts
+        env:
+          C2_ACCESS_TOKEN: ${{ secrets.C2_ACCESS_TOKEN }}
         run: uv run simple_auth.py
 
-      # 6. Download full history
+      # 5. Download full history
       - name: Download full workout history
         working-directory: scripts
+        env:
+          C2_ACCESS_TOKEN: ${{ secrets.C2_ACCESS_TOKEN }}
         run: |
           echo "Downloading full workout history..."
           uv run download_history.py
 
-      # 7. Generate Heatmap (新增步骤：下载完历史当然要重新画图)
+      # 6. Generate Heatmap (新增步骤：下载完历史当然要重新画图)
       - name: Generate Activity Heatmap
         working-directory: scripts
         run: uv run update_heatmap.py
 
-      # 8. Check for changes (会检测到 data/ 下的新 tcx, json 和 png)
+      # 7. Check for changes (会检测到 data/ 下的新 tcx, json 和 png)
       - name: Check for changes
         id: check_changes
         run: |
@@ -68,14 +75,14 @@ jobs:
             echo "No new activities to commit."
           fi
 
-      # 9. Configure git
+      # 8. Configure git
       - name: Configure git
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           git config --local user.email "c2-bot@users.noreply.github.com"
           git config --local user.name "C2-Bot"
 
-      # 10. Commit and push changes
+      # 9. Commit and push changes
       - name: Commit changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
@@ -87,12 +94,11 @@ jobs:
 
       - name: Push changes
         if: steps.check_changes.outputs.has_changes == 'true'
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/push-backup.sh
 
-      # 11. Summary
+      # 10. Summary
       - name: Summary
         run: |
           echo "## Full History Download Summary" >> $GITHUB_STEP_SUMMARY

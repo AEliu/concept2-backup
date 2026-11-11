@@ -216,22 +216,23 @@ test('untrusted workflow IDs never enter shell source directly', () => {
 });
 
 test('deletion dispatch never calls Concept2 and rejects unknown event types', () => {
-  const dispatch = workflowStep('Download single activity (repository dispatch)');
-  assert.ok(dispatch.includes('EVENT_TYPE: ${{ github.event.client_payload.event_type }}'));
-  assert.match(dispatch, /case "\$EVENT_TYPE" in/);
-  assert.match(dispatch, /result-added\)\s+uv run download_single\.py "\$RESULT_ID"/);
-  assert.match(dispatch, /result-updated\)\s+uv run download_single\.py "\$RESULT_ID" --update/);
-  assert.match(dispatch, /result-deleted\)\s+uv run record_deleted\.py "\$RESULT_ID"/);
-  assert.match(dispatch, /\*\)\s+echo "Invalid event type" >&2\s+exit 1/);
-  assert.doesNotMatch(dispatch.slice(dispatch.indexOf('        run: |')), /\$\{\{/);
+  const validate = workflowStep('Validate repository dispatch');
+  assert.match(validate, /result-added\|result-updated\|result-deleted\) ;;\s+\*\) echo "Invalid event type" >&2; exit 1/);
+  assert.match(validate, /if ! \[\[ "\$RESULT_ID" =~ \^\[1-9\]\[0-9\]\*\$ \]\]; then/);
 
-  for (const name of [
-    'Configure environment',
-    'Validate Concept2 Access Token',
-    'Generate Activity Heatmap (Static)'
-  ]) {
-    assert.match(workflowStep(name), /if: github\.event_name != 'repository_dispatch' \|\| github\.event\.client_payload\.event_type != 'result-deleted'/);
-  }
+  const download = workflowStep('Download single activity (repository dispatch)');
+  assert.match(download, /event_type == 'result-added' \|\| github\.event\.client_payload\.event_type == 'result-updated'/);
+  assert.match(download, /result-added\)\s+uv run download_single\.py "\$RESULT_ID"/);
+  assert.match(download, /result-updated\)\s+uv run download_single\.py "\$RESULT_ID" --update/);
+  assert.doesNotMatch(download, /record_deleted\.py/);
+
+  const deleted = workflowStep('Record deleted activity (repository dispatch)');
+  assert.match(deleted, /event_type == 'result-deleted'/);
+  assert.match(deleted, /uv run record_deleted\.py "\$RESULT_ID"/);
+  assert.doesNotMatch(deleted, /C2_ACCESS_TOKEN|download_single\.py/);
+
+  assert.match(workflowStep('Validate Concept2 Access Token'), /event_type == 'result-added' \|\| github\.event\.client_payload\.event_type == 'result-updated'/);
+  assert.match(workflowStep('Generate Activity Heatmap (Static)'), /event_type != 'result-deleted'/);
 });
 
 test('rate limiter configuration requires no Durable Object migration', () => {
@@ -240,8 +241,13 @@ test('rate limiter configuration requires no Durable Object migration', () => {
   assert.doesNotMatch(wrangler, /durable_objects|migrations|WebhookGate/);
 });
 
-test('repository dispatch is serialized by digest and manual runs use run ID', () => {
-  assert.match(workflow, /concurrency:\s+group: c2-\$\{\{ github\.event_name == 'repository_dispatch' && github\.event\.client_payload\.event_digest \|\| github\.run_id \}\}\s+cancel-in-progress: false\s+queue: max/);
+test('all repository writers serialize by branch while retaining the digest marker', () => {
+  const fullHistory = readFileSync(new URL('../../.github/workflows/download-full-history.yml', import.meta.url), 'utf8')
+    .replace(/\r\n/g, '\n');
+  const lock = /concurrency:\s+group: c2-backup-\$\{\{ github\.repository \}\}-\$\{\{ github\.ref \}\}\s+cancel-in-progress: false\s+queue: max/;
+  assert.match(workflow, lock);
+  assert.match(fullHistory, lock);
+  assert.match(workflow, /EVENT_DIGEST: \$\{\{ github\.event\.client_payload\.event_digest \}\}/);
 });
 
 test('preflight validates digest through env and fails closed on artifact API errors', () => {
