@@ -12,5 +12,9 @@ distance and historical rounding adjustments. The difference is frozen in the
 pending update journal so interrupted updates use the same value during
 recovery. A legacy journal without this value stops recovery for manual
 inspection instead of guessing. If a processed TCX is damaged and its old
-statistical contribution cannot be separated from manual distance, the update
-also stops before changing the file or statistics.
+statistical contribution cannot be verified, the update also stops before
+changing the file or statistics. A damaged TCX not yet marked processed can
+still be replaced after its downloaded replacement passes validation.
+Recovery verifies the existing statistics and projected totals before removing
+an old TCX. If a journal says `stats.json` existed when the update began but
+it is missing during recovery, the process stops for manual inspection.

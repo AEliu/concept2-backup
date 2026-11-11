@@ -81,7 +81,12 @@ def update_tcx_file(data_dir: Path, result: dict, tcx_content: bytes) -> Path:
         added_distances={new_date: new_distance},
     )
     journal = write_pending_update(
-        data_dir, result_id, target, affected_dates, adjustments
+        data_dir,
+        result_id,
+        target,
+        affected_dates,
+        adjustments,
+        previous_stats is not None,
     )
     stage = pending_stage_path(data_dir, result_id)
 

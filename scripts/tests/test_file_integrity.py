@@ -105,8 +105,8 @@ class FileIntegrityTests(unittest.TestCase):
         stats_path.write_text(
             json.dumps(
                 {
-                    "daily_distances": {"2026-11-10": 0},
-                    "processed_files": [self.path.name],
+                    "daily_distances": {},
+                    "processed_files": [],
                 }
             ),
             encoding="utf-8",
@@ -129,8 +129,8 @@ class FileIntegrityTests(unittest.TestCase):
             downloaded, skipped, failures = download_history.download_results(
                 history_api, self.data_dir, [self.result]
             )
-        # The old 1500 m could be either the damaged file's contribution or a
-        # manual adjustment. Refuse to guess before touching either file.
+        # After the first repair the file is marked processed. Its later
+        # corruption makes the old 1500 m contribution unverifiable.
         self.assertEqual((downloaded, skipped, failures), (0, 0, [123]))
         self.assertEqual(history_api.downloaded, [123])
         self.assertEqual(self.path.read_bytes(), b"<truncated")
