@@ -19,15 +19,67 @@ on:
   repository_dispatch:
     types: [c2_new_activity]
 
+concurrency:
+  group: c2-${{ github.event_name == 'repository_dispatch' && github.event.client_payload.event_digest || github.run_id }}
+  cancel-in-progress: false
+  queue: max
+
 # 允许 GITHUB_TOKEN 修改仓库内容(git push) 和 部署 Pages
 permissions:
   contents: write
+  actions: read
   pages: write
   id-token: write
 
 jobs:
+  webhook-preflight:
+    if: github.event_name == 'repository_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      duplicate: ${{ steps.lookup.outputs.duplicate }}
+      marker_name: ${{ steps.lookup.outputs.marker_name }}
+    steps:
+      - name: Validate digest and check completed webhook marker
+        id: lookup
+        env:
+          EVENT_DIGEST: ${{ github.event.client_payload.event_digest }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$EVENT_DIGEST" =~ ^[a-f0-9]{64}$ ]]; then
+            echo "Invalid event digest" >&2
+            exit 1
+          fi
+          marker_name="c2-webhook-${EVENT_DIGEST}"
+          echo "marker_name=${marker_name}" >> "$GITHUB_OUTPUT"
+
+          run_ids=$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${marker_name}&per_page=100" |
+            jq -r --arg marker "$marker_name" \
+              'if (.artifacts | type) != "array" then error("Invalid artifact response") else (.artifacts[] | select(.name == $marker) | if (.expired | type) != "boolean" then error("Invalid marker status") elif .expired then empty elif (.workflow_run.id | type) != "number" then error("Invalid marker run") else .workflow_run.id end) end')
+
+          duplicate=false
+          while IFS= read -r run_id; do
+            [ -z "$run_id" ] && continue
+            if ! [[ "$run_id" =~ ^[1-9][0-9]*$ ]]; then
+              echo "Invalid marker workflow run" >&2
+              exit 1
+            fi
+            valid_run=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" \
+              --jq '.conclusion == "success" and .event == "repository_dispatch" and (.path == ".github/workflows/backup.yml" or ((.path // "") | startswith(".github/workflows/backup.yml@")))')
+            if [ "$valid_run" = true ]; then
+              duplicate=true
+              break
+            fi
+          done <<< "$run_ids"
+          echo "duplicate=${duplicate}" >> "$GITHUB_OUTPUT"
+
   # Job 1: 数据更新 + 前端构建
   backup-and-build:
+    needs: webhook-preflight
+    if: ${{ always() && (github.event_name == 'workflow_dispatch' || (needs.webhook-preflight.result == 'success' && needs.webhook-preflight.outputs.duplicate == 'false')) }}
     runs-on: ubuntu-latest
     outputs:
       has_changes: ${{ steps.check_changes.outputs.has_changes }}
@@ -233,3 +285,20 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  mark-webhook-complete:
+    needs: [webhook-preflight, backup-and-build, deploy-pages]
+    if: ${{ github.event_name == 'repository_dispatch' && needs.webhook-preflight.result == 'success' && needs.webhook-preflight.outputs.duplicate == 'false' && needs.backup-and-build.result == 'success' && needs.deploy-pages.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create completion marker
+        run: printf 'success\n' > "$RUNNER_TEMP/c2-webhook-complete"
+
+      - name: Upload completion marker
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ needs.webhook-preflight.outputs.marker_name }}
+          path: ${{ runner.temp }}/c2-webhook-complete
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: false

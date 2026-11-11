@@ -11,6 +11,6 @@
   "license": "ISC",
   "type": "module",
   "devDependencies": {
-    "wrangler": "^4.50.0"
+    "wrangler": "^4.159.0"
   }
 }

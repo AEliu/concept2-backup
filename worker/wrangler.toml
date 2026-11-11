@@ -2,5 +2,20 @@ name = 'concept2-backup'
 main = "src/index.js"
 compatibility_date = "2025-11-21"
 
-# Environment variables (set with wrangler secret)
-# GITHUB_PAT - GitHub Personal Access Token for API access
+# Secrets (set with wrangler secret): GITHUB_PAT, WEBHOOK_SECRET
+
+[[ratelimits]]
+name = "WEBHOOK_RATE_LIMIT"
+namespace_id = "2026111001"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+[[ratelimits]]
+name = "WEBHOOK_EVENT_LIMIT"
+namespace_id = "2026111002"
+
+  [ratelimits.simple]
+  limit = 1
+  period = 60
