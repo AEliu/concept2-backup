@@ -358,6 +358,7 @@ class ActivityUpdateTests(unittest.TestCase):
                     "target": "../outside.tcx",
                     "affected_dates": ["2026-11-10"],
                     "target_preexisted": False,
+                    "date_adjustments": {"2026-11-10": 0},
                 }
             ),
             encoding="utf-8",
@@ -432,6 +433,7 @@ class ActivityUpdateTests(unittest.TestCase):
             "target": "2026/2026_11_10_123.tcx",
             "affected_dates": ["2026-11-10"],
             "target_preexisted": False,
+            "date_adjustments": {"2026-11-10": 0},
         }
         for value in ("false", 0, None):
             with self.subTest(value=value):

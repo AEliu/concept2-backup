@@ -18,13 +18,15 @@ from pathlib import Path
 from activity_stats import (
     activity_date,
     activity_id,
+    checked_date_totals,
     pending_stage_path,
     recover_pending_updates,
     refresh_dates,
+    snapshot_date_adjustments,
     tcx_distance,
     tcx_path,
-    write_pending_update,
     write_atomically,
+    write_pending_update,
 )
 
 # 导入简化的认证客户端
@@ -59,7 +61,7 @@ def update_tcx_file(data_dir: Path, result: dict, tcx_content: bytes) -> Path:
         or str(result_id) != target.stem.rsplit("_", 1)[-1]
     ):
         raise ValueError("Updated result has an invalid ID or date")
-    tcx_distance(tcx_content)  # Do not replace a good backup with an invalid export.
+    new_distance = tcx_distance(tcx_content)
 
     previous = [
         path for path in data_dir.rglob("*.tcx") if activity_id(path.name) == result_id
@@ -70,7 +72,17 @@ def update_tcx_file(data_dir: Path, result: dict, tcx_content: bytes) -> Path:
     affected_dates = {new_date} | {
         date for path in previous if (date := activity_date(path.name)) is not None
     }
-    journal = write_pending_update(data_dir, result_id, target, affected_dates)
+    adjustments = snapshot_date_adjustments(data_dir, affected_dates, previous_stats)
+    checked_date_totals(
+        data_dir,
+        affected_dates,
+        adjustments,
+        excluded_paths=set(previous),
+        added_distances={new_date: new_distance},
+    )
+    journal = write_pending_update(
+        data_dir, result_id, target, affected_dates, adjustments
+    )
     stage = pending_stage_path(data_dir, result_id)
 
     try:
@@ -79,7 +91,7 @@ def update_tcx_file(data_dir: Path, result: dict, tcx_content: bytes) -> Path:
         for path in previous:
             if path != target:
                 path.unlink()
-        refresh_dates(data_dir, affected_dates)
+        refresh_dates(data_dir, affected_dates, adjustments)
     except Exception:
         # A failed rollback leaves the journal for recovery on the next run.
         for path, content in previous_content.items():
