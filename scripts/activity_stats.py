@@ -36,30 +36,79 @@ def activity_date(filename: str) -> str | None:
         return None
 
 
+def tcx_path(data_dir: Path, result: dict) -> Path:
+    """Derive a backup path only from a positive ID and an ISO calendar date."""
+    result_id = result.get("id")
+    if type(result_id) is not int or result_id <= 0:
+        raise ValueError("Result has an invalid ID or date")
+    raw_date = result.get("date")
+    if raw_date is None or raw_date == "":
+        target = data_dir / "unknown_year" / f"{result_id}.tcx"
+    else:
+        if not isinstance(raw_date, str):
+            raise ValueError("Result has an invalid ID or date")
+        date_text = raw_date.split(" ", 1)[0]
+        try:
+            date = datetime.date.fromisoformat(date_text)
+        except ValueError as exc:
+            raise ValueError("Result has an invalid ID or date") from exc
+        if date.isoformat() != date_text:
+            raise ValueError("Result has an invalid ID or date")
+        target = (
+            data_dir
+            / f"{date.year:04d}"
+            / (f"{date.year:04d}_{date.month:02d}_{date.day:02d}_{result_id}.tcx")
+        )
+    if not target.resolve().is_relative_to(data_dir.resolve()):
+        raise ValueError("Result path leaves data directory")
+    return target
+
+
 def tcx_distance(content: bytes) -> int:
     """Validate a downloaded TCX and return its summed lap distance."""
     try:
         root = ET.fromstring(content)
     except ET.ParseError as exc:
         raise ValueError("Invalid TCX XML") from exc
-    if root.tag.rsplit("}", 1)[-1] != "TrainingCenterDatabase":
+
+    def local_name(element: ET.Element) -> str:
+        return element.tag.rsplit("}", 1)[-1]
+
+    if local_name(root) != "TrainingCenterDatabase":
         raise ValueError("Not a TrainingCenterDatabase document")
 
+    groups = [child for child in root if local_name(child) == "Activities"]
+    if not groups:
+        raise ValueError("TCX has no activities")
+    activities = []
+    laps = []
+    for group in groups:
+        group_activities = [child for child in group if local_name(child) == "Activity"]
+        if not group_activities:
+            raise ValueError("TCX has an empty activities group")
+        for activity in group_activities:
+            activity_laps = [child for child in activity if local_name(child) == "Lap"]
+            if not activity_laps:
+                raise ValueError("TCX has an empty activity")
+            laps.extend(activity_laps)
+        activities.extend(group_activities)
+    if len(activities) != sum(local_name(node) == "Activity" for node in root.iter()):
+        raise ValueError("TCX has an activity outside Activities")
+    if len(laps) != sum(local_name(node) == "Lap" for node in root.iter()):
+        raise ValueError("TCX has a lap outside an activity")
+
     distances = []
-    for lap in root.iter():
-        if lap.tag.rsplit("}", 1)[-1] != "Lap":
-            continue
-        for child in lap:
-            if child.tag.rsplit("}", 1)[-1] == "DistanceMeters":
-                try:
-                    value = float(child.text)
-                except (TypeError, ValueError) as exc:
-                    raise ValueError("Invalid TCX lap distance") from exc
-                if not math.isfinite(value) or value < 0:
-                    raise ValueError("Invalid TCX lap distance")
-                distances.append(value)
-    if not distances:
-        raise ValueError("TCX has no lap distance")
+    for lap in laps:
+        fields = [child for child in lap if local_name(child) == "DistanceMeters"]
+        if len(fields) != 1:
+            raise ValueError("TCX lap needs one distance")
+        try:
+            value = float(fields[0].text)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Invalid TCX lap distance") from exc
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("Invalid TCX lap distance")
+        distances.append(value)
     return int(sum(distances))
 
 

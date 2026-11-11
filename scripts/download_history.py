@@ -17,7 +17,6 @@ The script will:
     3. Download missing TCX files to data/{Year}/{Date}_{ID}.tcx
 """
 
-import os
 import sys
 import time
 from datetime import datetime
@@ -28,6 +27,15 @@ import requests
 # 导入简化的认证客户端
 # 确保 simple_auth.py 在同一目录下
 from simple_auth import create_simple_api_client
+from activity_stats import (
+    activity_id,
+    activity_date,
+    recover_pending_updates,
+    tcx_distance,
+    tcx_path,
+    write_atomically,
+)
+from download_single import update_tcx_file
 
 # Configuration
 REQUEST_DELAY = 0.5  # Delay between API requests in seconds
@@ -42,62 +50,74 @@ def get_workout_date(result: Dict) -> Optional[str]:
     return None
 
 
-def get_workout_year(result: Dict) -> Optional[str]:
-    """Extract year from result"""
-    date_str = get_workout_date(result)
-    if date_str and len(date_str) >= 4:
-        return date_str[:4]
-    return None
-
-
-def get_tcx_filename(result: Dict) -> str:
-    """Generate TCX filename from result data"""
-    result_id = result["id"]
-    date_str = get_workout_date(result)
-
-    if date_str:
-        # Replace dashes with underscores for filename
-        date_formatted = date_str.replace("-", "_")
-        return f"{date_formatted}_{result_id}.tcx"
-    else:
-        return f"{result_id}.tcx"
-
-
 def save_tcx_file(data_dir: Path, result: Dict, tcx_content: bytes) -> Path:
     """Save TCX file to appropriate directory"""
-    year = get_workout_year(result)
-    if not year:
-        year = "unknown_year"
-
-    # Create year directory if it doesn't exist
-    year_dir = data_dir / year
-    year_dir.mkdir(parents=True, exist_ok=True)
-
-    # Generate filename
-    filename = get_tcx_filename(result)
-    file_path = year_dir / filename
-
-    # Save file
-    with open(file_path, "wb") as f:
-        f.write(tcx_content)
+    tcx_distance(tcx_content)
+    file_path = tcx_path(data_dir, result)
+    write_atomically(file_path, tcx_content)
 
     return file_path
 
 
 def tcx_file_exists(data_dir: Path, result: Dict) -> bool:
     """Check if TCX file already exists"""
-    year = get_workout_year(result)
-    if not year:
+    file_path = tcx_path(data_dir, result)
+    if not file_path.exists():
         return False
-
-    year_dir = data_dir / year
-    if not year_dir.exists():
+    try:
+        tcx_distance(file_path.read_bytes())
+    except ValueError:
         return False
+    return True
 
-    filename = get_tcx_filename(result)
-    file_path = year_dir / filename
 
-    return file_path.exists()
+def download_results(api, data_dir: Path, results: list) -> tuple[int, int, list]:
+    """Attempt every result and return downloaded, skipped, and failed IDs."""
+    recover_pending_updates(data_dir)
+    paths_by_id: dict[int, set[Path]] = {}
+    for path in data_dir.rglob("*.tcx"):
+        if (stored_id := activity_id(path.name)) is not None:
+            paths_by_id.setdefault(stored_id, set()).add(path)
+    downloaded = 0
+    skipped = 0
+    failed_ids = []
+
+    for idx, result in enumerate(results, 1):
+        result_id = (
+            result.get("id", "<missing>") if isinstance(result, dict) else "<malformed>"
+        )
+        try:
+            workout_date = get_workout_date(result) or "unknown date"
+            target = tcx_path(data_dir, result)
+            prior_paths = paths_by_id.get(result_id, set())
+            if prior_paths == {target} and tcx_file_exists(data_dir, result):
+                print(
+                    f"[{idx}/{len(results)}] Skipping ID {result_id} ({workout_date}) - already exists"
+                )
+                skipped += 1
+                continue
+
+            print(
+                f"[{idx}/{len(results)}] Downloading ID {result_id} ({workout_date})...",
+                end=" ",
+                flush=True,
+            )
+            tcx_content = api.download_tcx(result_id)
+            if prior_paths and activity_date(target.name) is not None:
+                file_path = update_tcx_file(data_dir, result, tcx_content)
+            elif prior_paths and prior_paths != {target}:
+                raise ValueError("Cannot reconcile result without a valid date")
+            else:
+                file_path = save_tcx_file(data_dir, result, tcx_content)
+            paths_by_id[result_id] = {file_path}
+            print(f"saved to {file_path.relative_to(data_dir.parent)}")
+            downloaded += 1
+            time.sleep(REQUEST_DELAY)
+        except Exception as exc:
+            print(f"ERROR: {exc}")
+            failed_ids.append(result_id)
+
+    return downloaded, skipped, failed_ids
 
 
 def check_and_create_api_client():
@@ -131,12 +151,13 @@ def check_and_create_api_client():
         return None
 
 
-def main():
+def main(api=None, data_dir: Path | None = None):
     """Main download workflow"""
     print("=== Concept2 Workout History Downloader ===\n")
 
     # 1. 初始化客户端
-    api = check_and_create_api_client()
+    if api is None:
+        api = check_and_create_api_client()
     if not api:
         sys.exit(1)
 
@@ -144,7 +165,8 @@ def main():
 
     # Ensure data directory exists
     # scripts/../data -> root/data
-    data_dir = Path(__file__).resolve().parent.parent / "data"
+    if data_dir is None:
+        data_dir = Path(__file__).resolve().parent.parent / "data"
     data_dir.mkdir(exist_ok=True)
 
     try:
@@ -157,55 +179,24 @@ def main():
 
         # 3. 处理结果并下载
         print("\nProcessing results...")
-        downloaded = 0
-        skipped = 0
-        errors = 0
-
-        for idx, result in enumerate(results, 1):
-            result_id = result["id"]
-            workout_date = get_workout_date(result) or "unknown date"
-
-            # Check if file already exists
-            if tcx_file_exists(data_dir, result):
-                print(
-                    f"[{idx}/{len(results)}] Skipping ID {result_id} ({workout_date}) - already exists"
-                )
-                skipped += 1
-                continue
-
-            # Download TCX file
-            print(
-                f"[{idx}/{len(results)}] Downloading ID {result_id} ({workout_date})...",
-                end=" ",
-                flush=True,
-            )
-
-            try:
-                tcx_content = api.download_tcx(result_id)
-                file_path = save_tcx_file(data_dir, result, tcx_content)
-                # print relative path for cleaner output
-                rel_path = file_path.relative_to(data_dir.parent)
-                print(f"saved to {rel_path}")
-                downloaded += 1
-
-                # Be polite to the API
-                time.sleep(REQUEST_DELAY)
-
-            except Exception as e:
-                print(f"ERROR: {e}")
-                errors += 1
+        downloaded, skipped, failed_ids = download_results(api, data_dir, results)
 
         # Summary
         print("\n" + "=" * 60)
-        print("Download Complete!")
+        print("Download Incomplete!" if failed_ids else "Download Complete!")
         print("=" * 60)
         print(f"Total results: {len(results)}")
         print(f"Downloaded: {downloaded}")
         print(f"Skipped (already exists): {skipped}")
-        print(f"Errors: {errors}")
+        print(f"Errors: {len(failed_ids)}")
+        if failed_ids:
+            print(f"Failed result IDs: {', '.join(map(str, failed_ids))}")
         print(f"\nFiles saved to: {data_dir}")
 
-        print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 下载完成！")
+        outcome = "下载未完成，存在失败项目。" if failed_ids else "下载完成！"
+        print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {outcome}")
+        if failed_ids:
+            sys.exit(1)
 
     # 4. 错误处理 (Correctly indented inside main or wrapping the logic)
     except requests.exceptions.HTTPError as e:
