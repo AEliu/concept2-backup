@@ -14,6 +14,7 @@ Usage:
 """
 
 import os
+import sys
 import requests
 from datetime import datetime
 from typing import Optional, Dict
@@ -21,6 +22,7 @@ from typing import Optional, Dict
 # API Constants
 API_BASE = "https://log.concept2.com/api"
 RESULTS_URL = f"{API_BASE}/users/me/results"
+AUTH_TIMEOUT_SECONDS = 10
 
 
 class SimpleConcept2AuthClient:
@@ -41,7 +43,9 @@ class SimpleConcept2AuthClient:
         """Validate the access token by making a test request to /users/me"""
         try:
             headers = self.get_headers()
-            response = requests.get(f"{API_BASE}/users/me", headers=headers)
+            response = requests.get(
+                f"{API_BASE}/users/me", headers=headers, timeout=AUTH_TIMEOUT_SECONDS
+            )
 
             if response.status_code == 200:
                 print(
@@ -59,9 +63,9 @@ class SimpleConcept2AuthClient:
                 )
                 return False
 
-        except Exception as e:
+        except Exception:
             print(
-                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Token validation failed: {e}"
+                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Token validation request failed"
             )
             return False
 
@@ -167,7 +171,7 @@ def create_simple_api_client(access_token: str = None) -> SimpleConcept2API:
     return SimpleConcept2API(auth_client)
 
 
-def main():
+def main() -> int:
     """Test the simple authentication"""
     print(
         f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Testing simple Concept2 API authentication..."
@@ -175,33 +179,45 @@ def main():
 
     try:
         api = create_simple_api_client()
-
-        if api.auth.validate_credentials():
-            print(
-                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ Authentication successful!"
-            )
-
-            # Get user info
-            response = requests.get(
-                f"{API_BASE}/users/me", headers=api.auth.get_headers()
-            )
-            user_data = response.json().get("data", {})
-            print(
-                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] User: {user_data.get('username', 'Unknown')}"
-            )
-        else:
-            print(
-                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Authentication failed!"
-            )
-
-    except ValueError as e:
-        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ {e}")
+    except ValueError:
+        print(
+            f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ No Concept2 Access Token found"
+        )
         print("\nTo use this client, set your access token:")
         print("export C2_ACCESS_TOKEN='your_concept2_access_token'")
         print(
             "\nYou can get an access token from your Concept2 Logbook account settings."
         )
+        return 1
+
+    if not api.auth.validate_credentials():
+        print(
+            f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Authentication failed!"
+        )
+        return 1
+
+    try:
+        response = requests.get(
+            f"{API_BASE}/users/me",
+            headers=api.auth.get_headers(),
+            timeout=AUTH_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        user_data = response.json().get("data", {})
+    except Exception:
+        print(
+            f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Failed to fetch Concept2 user info"
+        )
+        return 1
+
+    print(
+        f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ Authentication successful!"
+    )
+    print(
+        f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] User: {user_data.get('username', 'Unknown')}"
+    )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
