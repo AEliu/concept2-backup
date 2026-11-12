@@ -98,15 +98,15 @@ class FileIntegrityTests(unittest.TestCase):
         self.assertEqual(self.path.read_bytes(), tcx())
         self.assertEqual(list(self.path.parent.glob(".2026_11_10_123.tcx.*")), [])
 
-    def test_existing_invalid_file_is_redownloaded_by_single_and_history(self):
+    def test_invalid_file_repairs_only_when_old_distance_is_unambiguous(self):
         self.path.parent.mkdir()
         self.path.write_bytes(b"<truncated")
         stats_path = self.data_dir / "stats.json"
         stats_path.write_text(
             json.dumps(
                 {
-                    "daily_distances": {"2026-11-10": 0},
-                    "processed_files": [self.path.name],
+                    "daily_distances": {},
+                    "processed_files": [],
                 }
             ),
             encoding="utf-8",
@@ -124,16 +124,18 @@ class FileIntegrityTests(unittest.TestCase):
 
         self.path.write_bytes(b"<truncated")
         history_api = FakeAPI({123: tcx("2000")})
+        before_stats = stats_path.read_bytes()
         with patch.object(download_history.time, "sleep"):
             downloaded, skipped, failures = download_history.download_results(
                 history_api, self.data_dir, [self.result]
             )
-        self.assertEqual((downloaded, skipped, failures), (1, 0, []))
+        # After the first repair the file is marked processed. Its later
+        # corruption makes the old 1500 m contribution unverifiable.
+        self.assertEqual((downloaded, skipped, failures), (0, 0, [123]))
         self.assertEqual(history_api.downloaded, [123])
-        self.assertEqual(self.path.read_bytes(), tcx("2000"))
-        self.assertEqual(
-            json.loads(stats_path.read_text())["daily_distances"]["2026-11-10"], 2000
-        )
+        self.assertEqual(self.path.read_bytes(), b"<truncated")
+        self.assertEqual(stats_path.read_bytes(), before_stats)
+        self.assertEqual(list(self.data_dir.glob(".pending-update-*")), [])
 
     def test_valid_existing_file_is_skipped(self):
         self.path.parent.mkdir()

@@ -15,6 +15,7 @@ DATED_TCX = re.compile(
 )
 UNDATED_TCX = re.compile(r"(?P<id>[1-9]\d*)\.tcx")
 PENDING_UPDATE = re.compile(r"\.pending-update-(?P<id>[1-9]\d*)\.json")
+MAX_SAFE_DISTANCE = 2**53 - 1
 
 
 def activity_id(filename: str) -> int | None:
@@ -128,30 +129,182 @@ def write_atomically(path: Path, content: bytes) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def refresh_dates(data_dir: Path, dates: set[str]) -> None:
-    """Rebuild only edited dates from current TCX files, preserving other history."""
-    if not dates:
-        return
+def _validate_adjustments(dates: set[str], adjustments: object) -> dict[str, int]:
+    """Reject incomplete or unsafe frozen non-TCX distance adjustments."""
+    if not isinstance(adjustments, dict) or set(adjustments) != dates:
+        raise ValueError("Invalid pending date adjustments")
+    if any(
+        type(value) is not int or abs(value) > MAX_SAFE_DISTANCE
+        for value in adjustments.values()
+    ):
+        raise ValueError("Invalid pending date adjustment value")
+    return adjustments
 
-    stats_file = data_dir / "stats.json"
-    if stats_file.exists():
-        with stats_file.open(encoding="utf-8") as handle:
-            stats = json.load(handle)
-    else:
-        stats = {"processed_files": [], "daily_distances": {}}
 
-    current = {date: [] for date in dates}
+def _load_statistics(content: bytes | None) -> dict:
+    """Parse the complete stored schema before a reconciliation can change files."""
+    stats = (
+        json.loads(content)
+        if content is not None
+        else {"processed_files": [], "daily_distances": {}}
+    )
+    if not isinstance(stats, dict):
+        raise ValueError("Invalid statistics structure")
+    processed = stats.get("processed_files")
+    daily = stats.get("daily_distances")
+    if (
+        not isinstance(processed, list)
+        or any(not isinstance(name, str) for name in processed)
+        or any(
+            activity_date(name) is None and UNDATED_TCX.fullmatch(name) is None
+            for name in processed
+        )
+        or len(processed) != len(set(processed))
+        or not isinstance(daily, dict)
+    ):
+        raise ValueError("Invalid statistics structure")
+    for date, distance in daily.items():
+        try:
+            valid_date = (
+                isinstance(date, str)
+                and datetime.date.fromisoformat(date).isoformat() == date
+            )
+        except ValueError:
+            valid_date = False
+        if (
+            not valid_date
+            or type(distance) is not int
+            or not 0 <= distance <= MAX_SAFE_DISTANCE
+        ):
+            raise ValueError("Invalid stored daily distance")
+    return stats
+
+
+def _dated_tcx_paths(data_dir: Path, dates: set[str]) -> dict[str, list[Path]]:
+    """Find affected workouts only in their canonical year directory."""
+    paths_by_date = {date: [] for date in dates}
+    seen_names = set()
+    root = data_dir.resolve()
     for path in data_dir.rglob("*.tcx"):
         date = activity_date(path.name)
-        if date in current:
-            current[date].append(path)
+        if date not in paths_by_date:
+            continue
+        canonical = data_dir / date[:4] / path.name
+        if (
+            path != canonical
+            or path.is_symlink()
+            or path.parent.is_symlink()
+            or not path.resolve().is_relative_to(root)
+        ):
+            raise ValueError("TCX path is not canonical for its date")
+        if path.name in seen_names:
+            raise ValueError("Duplicate dated TCX basename")
+        seen_names.add(path.name)
+        paths_by_date[date].append(path)
+    return paths_by_date
 
-    daily_distances = stats.setdefault("daily_distances", {})
+
+def checked_date_totals(
+    data_dir: Path,
+    dates: set[str],
+    adjustments: dict[str, int],
+    *,
+    excluded_paths: set[Path] | None = None,
+    added_distances: dict[str, int] | None = None,
+) -> tuple[dict[str, list[Path]], dict[str, int]]:
+    """Validate the projected TCX plus adjustment totals before file changes."""
+    adjustments = _validate_adjustments(dates, adjustments)
+    excluded_paths = excluded_paths or set()
+    added_distances = added_distances or {}
+    if not set(added_distances) <= dates or any(
+        type(value) is not int or not 0 <= value <= MAX_SAFE_DISTANCE
+        for value in added_distances.values()
+    ):
+        raise ValueError("Invalid projected TCX distance")
+
+    paths_by_date = _dated_tcx_paths(data_dir, dates)
+
+    totals = {}
+    for date, paths in paths_by_date.items():
+        tcx_total = added_distances.get(date, 0)
+        for path in paths:
+            if path in excluded_paths:
+                continue
+            distance = tcx_distance(path.read_bytes())
+            if distance > MAX_SAFE_DISTANCE:
+                raise ValueError("TCX distance exceeds safe range")
+            tcx_total += distance
+            if tcx_total > MAX_SAFE_DISTANCE:
+                raise ValueError("TCX day total exceeds safe range")
+        adjusted = tcx_total + adjustments[date]
+        if not 0 <= adjusted <= MAX_SAFE_DISTANCE:
+            raise ValueError("Adjusted daily distance is outside the safe range")
+        totals[date] = adjusted
+        paths_by_date[date] = [path for path in paths if path not in excluded_paths]
+    return paths_by_date, totals
+
+
+def snapshot_date_adjustments(
+    data_dir: Path, dates: set[str], stats_content: bytes | None
+) -> dict[str, int]:
+    """Freeze each day's stored distance not backed by processed TCX files."""
+    stats = _load_statistics(stats_content)
+    processed = stats["processed_files"]
+    daily = stats["daily_distances"]
+    processed_set = set(processed)
+    expected_processed = {
+        name for name in processed_set if activity_date(name) in dates
+    }
+    found_processed = set()
+    processed_totals = {date: 0 for date in dates}
+    for date, paths in _dated_tcx_paths(data_dir, dates).items():
+        for path in paths:
+            if path.name not in processed_set:
+                continue
+            found_processed.add(path.name)
+            try:
+                processed_totals[date] += tcx_distance(path.read_bytes())
+            except ValueError as exc:
+                raise ValueError(
+                    "Processed TCX is damaged; manual inspection required"
+                ) from exc
+            if processed_totals[date] > MAX_SAFE_DISTANCE:
+                raise ValueError("Processed TCX distance exceeds safe range")
+    if found_processed != expected_processed:
+        raise ValueError("Processed TCX is missing from the data directory")
+
+    adjustments = {}
+    for date in dates:
+        stored = daily.get(date, 0)
+        if type(stored) is not int or not 0 <= stored <= MAX_SAFE_DISTANCE:
+            raise ValueError("Invalid stored daily distance")
+        if date not in daily and processed_totals[date]:
+            raise ValueError("Processed TCX has no daily statistic")
+        adjustments[date] = stored - processed_totals[date]
+    return _validate_adjustments(dates, adjustments)
+
+
+def _prepared_statistics(
+    data_dir: Path,
+    dates: set[str],
+    adjustments: dict[str, int],
+    *,
+    excluded_paths: set[Path] | None = None,
+) -> bytes:
+    """Fully validate and serialize the projected statistics before mutation."""
+    adjustments = _validate_adjustments(dates, adjustments)
+    stats_file = data_dir / "stats.json"
+    if stats_file.is_symlink():
+        raise ValueError("Statistics file must not be a symlink")
+    stats = _load_statistics(stats_file.read_bytes() if stats_file.exists() else None)
+    current, totals = checked_date_totals(
+        data_dir, dates, adjustments, excluded_paths=excluded_paths
+    )
+
+    daily_distances = stats["daily_distances"]
     for date, paths in current.items():
-        if paths:
-            daily_distances[date] = sum(
-                tcx_distance(path.read_bytes()) for path in paths
-            )
+        if paths or totals[date]:
+            daily_distances[date] = totals[date]
         else:
             daily_distances.pop(date, None)
 
@@ -162,14 +315,21 @@ def refresh_dates(data_dir: Path, dates: set[str]) -> None:
     ]
     affected = [path.name for paths in current.values() for path in sorted(paths)]
     stats["processed_files"] = list(dict.fromkeys(unaffected + sorted(affected)))
-    write_atomically(
-        stats_file, (json.dumps(stats, indent=2, sort_keys=True) + "\n").encode("utf-8")
-    )
+    return (json.dumps(stats, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def refresh_dates(data_dir: Path, dates: set[str], adjustments: dict[str, int]) -> None:
+    """Rebuild edited dates from TCX plus frozen non-TCX adjustments."""
+    _validate_adjustments(dates, adjustments)
+    if dates:
+        write_atomically(
+            data_dir / "stats.json", _prepared_statistics(data_dir, dates, adjustments)
+        )
 
 
 def pending_update_path(data_dir: Path, result_id: int) -> Path:
     """Return the journal path for one result ID."""
-    if type(result_id) is not int or result_id <= 0:
+    if type(result_id) is not int or not 0 < result_id <= MAX_SAFE_DISTANCE:
         raise ValueError("Invalid pending result ID")
     return data_dir / f".pending-update-{result_id}.json"
 
@@ -181,20 +341,28 @@ def pending_stage_path(data_dir: Path, result_id: int) -> Path:
 
 def _validated_pending_update(
     data_dir: Path, journal_path: Path, record: object
-) -> tuple[int, Path, set[str], bool]:
+) -> tuple[int, Path, set[str], bool, bool, dict[str, int]]:
     """Validate a journal without trusting its filename, dates, or relative path."""
     match = PENDING_UPDATE.fullmatch(journal_path.name)
     if (
         not match
         or not isinstance(record, dict)
-        or set(record) != {"result_id", "target", "affected_dates", "target_preexisted"}
+        or set(record)
+        != {
+            "result_id",
+            "target",
+            "affected_dates",
+            "target_preexisted",
+            "stats_preexisted",
+            "date_adjustments",
+        }
     ):
         raise ValueError("Invalid pending update journal")
 
     result_id = record["result_id"]
     if (
         type(result_id) is not int
-        or result_id <= 0
+        or not 0 < result_id <= MAX_SAFE_DISTANCE
         or result_id != int(match.group("id"))
     ):
         raise ValueError("Invalid pending result ID")
@@ -202,6 +370,9 @@ def _validated_pending_update(
     target_preexisted = record["target_preexisted"]
     if type(target_preexisted) is not bool:
         raise ValueError("Invalid pending target preexistence")
+    stats_preexisted = record["stats_preexisted"]
+    if type(stats_preexisted) is not bool:
+        raise ValueError("Invalid pending statistics preexistence")
 
     dates = record["affected_dates"]
     if not isinstance(dates, list) or not dates or len(dates) > 64:
@@ -234,11 +405,24 @@ def _validated_pending_update(
     target = data_dir / parts[0] / parts[1]
     if not target.resolve().is_relative_to(data_dir.resolve()):
         raise ValueError("Pending target leaves data directory")
-    return result_id, target, set(dates), target_preexisted
+    adjustments = _validate_adjustments(set(dates), record["date_adjustments"])
+    return (
+        result_id,
+        target,
+        set(dates),
+        target_preexisted,
+        stats_preexisted,
+        adjustments,
+    )
 
 
 def write_pending_update(
-    data_dir: Path, result_id: int, target: Path, dates: set[str]
+    data_dir: Path,
+    result_id: int,
+    target: Path,
+    dates: set[str],
+    adjustments: dict[str, int],
+    stats_preexisted: bool,
 ) -> Path:
     """Record a recoverable update before changing any TCX path."""
     journal_path = pending_update_path(data_dir, result_id)
@@ -247,6 +431,8 @@ def write_pending_update(
         "target": target.relative_to(data_dir).as_posix(),
         "affected_dates": sorted(dates),
         "target_preexisted": target.exists(),
+        "stats_preexisted": stats_preexisted,
+        "date_adjustments": adjustments,
     }
     _validated_pending_update(data_dir, journal_path, record)
     stage = pending_stage_path(data_dir, result_id)
@@ -265,9 +451,12 @@ def recover_pending_updates(data_dir: Path) -> None:
             raise ValueError("Pending update journal is a symlink")
         with journal_path.open(encoding="utf-8") as handle:
             record = json.load(handle)
-        result_id, target, dates, target_preexisted = _validated_pending_update(
-            data_dir, journal_path, record
+        result_id, target, dates, target_preexisted, stats_preexisted, adjustments = (
+            _validated_pending_update(data_dir, journal_path, record)
         )
+        stats_file = data_dir / "stats.json"
+        if stats_preexisted and not stats_file.exists():
+            raise ValueError("Pending update statistics file is missing")
         stage = pending_stage_path(data_dir, result_id)
         if stage.is_symlink():
             raise ValueError("Pending update stage is a symlink")
@@ -283,11 +472,26 @@ def recover_pending_updates(data_dir: Path) -> None:
         if not landed and not target_preexisted and target.exists():
             tcx_distance(target.read_bytes())
             landed = True
-        if landed:
-            for path in data_dir.rglob("*.tcx"):
-                if path != target and activity_id(path.name) == result_id:
-                    path.unlink()
-        # If the target was never written, leave every existing copy in place.
-        refresh_dates(data_dir, dates)
+        stored_paths = {
+            path
+            for path in data_dir.rglob("*.tcx")
+            if activity_id(path.name) == result_id
+        }
+        if any(
+            (date := activity_date(path.name)) is not None and date not in dates
+            for path in stored_paths
+        ):
+            raise ValueError("Pending update omits an existing result date")
+        old_paths = stored_paths - {target} if landed else set()
+        projected_stats = _prepared_statistics(
+            data_dir, dates, adjustments, excluded_paths=old_paths
+        )
+        # Commit the complete statistics file before removing the old path.
+        # A failed write leaves both TCX copies and the journal for retry.
+        write_atomically(stats_file, projected_stats)
+        for path in old_paths:
+            path.unlink()
+        # If the target never landed, no path is removed; the journal still
+        # reconciles any TCX written after the interruption.
         stage.unlink(missing_ok=True)
         journal_path.unlink()
