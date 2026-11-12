@@ -95,6 +95,54 @@ class SimpleAuthPreflightTests(unittest.TestCase):
         self.assertNotIn("Authentication successful", output)
         self.assertEqual(get.call_count, 2)
 
+    def test_user_info_non_200_with_valid_body_still_exits_nonzero(self):
+        status, output, get = self.run_main(response(200), response(202))
+
+        self.assertEqual(status, 1)
+        self.assertIn("Failed to fetch Concept2 user info", output)
+        self.assertNotIn("Authentication successful", output)
+        self.assertEqual(get.call_count, 2)
+
+    def test_malformed_user_profile_exits_nonzero_without_logging_body(self):
+        malformed_profiles = (
+            ("missing data", {}),
+            ("empty data", {"data": {}}),
+            ("null data", {"data": None}),
+            ("list data", {"data": []}),
+            ("string data", {"data": "invalid"}),
+            ("missing username", {"data": {"id": 1}}),
+            ("empty username", {"data": {"username": ""}}),
+            ("whitespace username", {"data": {"username": "  "}}),
+            ("null username", {"data": {"username": None}}),
+            ("list username", {"data": {"username": []}}),
+            ("number username", {"data": {"username": 7}}),
+            ("list root", []),
+            ("null root", None),
+        )
+        for name, profile in malformed_profiles:
+            with self.subTest(name=name):
+                bad = response(200)
+                bad.json.return_value = profile
+                bad.text = f"private-body-marker {TOKEN}"
+                status, output, get = self.run_main(response(200), bad)
+
+                self.assertEqual(status, 1)
+                self.assertIn("Failed to fetch Concept2 user info", output)
+                self.assertNotIn("Authentication successful", output)
+                self.assertNotIn("User:", output)
+                self.assertNotIn("private-body-marker", output)
+                self.assertEqual(get.call_count, 2)
+
+    def test_user_profile_json_error_exits_nonzero_without_exception_details(self):
+        bad = response(200)
+        bad.json.side_effect = ValueError(f"malformed JSON includes {TOKEN}")
+        status, output, get = self.run_main(response(200), bad)
+
+        self.assertEqual(status, 1)
+        self.assertIn("Failed to fetch Concept2 user info", output)
+        self.assertNotIn("Authentication successful", output)
+        self.assertEqual(get.call_count, 2)
+
     def test_cli_entrypoint_propagates_unauthorized_exit(self):
         output = io.StringIO()
         with (
@@ -106,6 +154,25 @@ class SimpleAuthPreflightTests(unittest.TestCase):
             runpy.run_path(str(SCRIPT), run_name="__main__")
 
         self.assertEqual(exit_status.exception.code, 1)
+        self.assertNotIn(TOKEN, output.getvalue())
+
+    def test_cli_entrypoint_rejects_malformed_user_profile(self):
+        bad = response(200)
+        bad.json.return_value = {"data": {}}
+        bad.text = f"private-body-marker {TOKEN}"
+        output = io.StringIO()
+        with (
+            patch.dict(os.environ, {"C2_ACCESS_TOKEN": TOKEN}),
+            patch("requests.get", side_effect=(response(200), bad)),
+            contextlib.redirect_stdout(output),
+            self.assertRaises(SystemExit) as exit_status,
+        ):
+            runpy.run_path(str(SCRIPT), run_name="__main__")
+
+        self.assertEqual(exit_status.exception.code, 1)
+        self.assertIn("Failed to fetch Concept2 user info", output.getvalue())
+        self.assertNotIn("Authentication successful", output.getvalue())
+        self.assertNotIn("private-body-marker", output.getvalue())
         self.assertNotIn(TOKEN, output.getvalue())
 
     def test_cli_missing_token_exits_nonzero(self):

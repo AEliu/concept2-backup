@@ -203,7 +203,17 @@ def main() -> int:
             timeout=AUTH_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
-        user_data = response.json().get("data", {})
+        if response.status_code != 200:
+            raise ValueError("Unexpected Concept2 user profile status")
+        profile = response.json()
+        if not isinstance(profile, dict):
+            raise ValueError("Invalid Concept2 user profile")
+        user_data = profile.get("data")
+        if not isinstance(user_data, dict):
+            raise ValueError("Invalid Concept2 user profile data")
+        username = user_data.get("username")
+        if not isinstance(username, str) or not username.strip():
+            raise ValueError("Invalid Concept2 username")
     except Exception:
         print(
             f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Failed to fetch Concept2 user info"
@@ -213,9 +223,7 @@ def main() -> int:
     print(
         f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ✅ Authentication successful!"
     )
-    print(
-        f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] User: {user_data.get('username', 'Unknown')}"
-    )
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] User: {username}")
     return 0
 
 
