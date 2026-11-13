@@ -277,7 +277,7 @@ test('duplicate dispatch skips backup, build, and deployment while manual runs p
   const backup = workflow.split('  backup-and-build:')[1].split('  deploy-pages:')[0];
   const deploy = workflow.split('  deploy-pages:')[1].split('  mark-webhook-complete:')[0];
   assert.match(backup, /needs: webhook-preflight/);
-  assert.match(backup, /always\(\).*github\.event_name == 'workflow_dispatch'/);
+  assert.match(backup, /!cancelled\(\).*github\.event_name == 'workflow_dispatch'/);
   assert.match(backup, /needs\.webhook-preflight\.result == 'success' && needs\.webhook-preflight\.outputs\.duplicate == 'false'/);
   assert.match(deploy, /needs: backup-and-build/);
 });

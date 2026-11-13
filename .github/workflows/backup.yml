@@ -1,6 +1,8 @@
 name: Backup Concept2 & Deploy Web
 
 on:
+  schedule:
+    - cron: '15 19 * * *' # 03:15 Asia/Shanghai
   workflow_dispatch:
     inputs:
       mode:
@@ -79,7 +81,7 @@ jobs:
   # Job 1: 数据更新 + 前端构建
   backup-and-build:
     needs: webhook-preflight
-    if: ${{ always() && github.ref_type == 'branch' && (github.event_name == 'workflow_dispatch' || (needs.webhook-preflight.result == 'success' && needs.webhook-preflight.outputs.duplicate == 'false')) }}
+    if: ${{ !cancelled() && github.ref_type == 'branch' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (needs.webhook-preflight.result == 'success' && needs.webhook-preflight.outputs.duplicate == 'false')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -196,6 +198,16 @@ jobs:
           C2_ACCESS_TOKEN: ${{ secrets.C2_ACCESS_TOKEN }}
           WORKOUT_DATE: ${{ github.event.inputs.workout_date }}
         run: uv run download_history.py --date "$WORKOUT_DATE"
+
+      - name: Reconcile yesterday's activities (scheduled)
+        if: github.event_name == 'schedule'
+        working-directory: scripts
+        env:
+          C2_ACCESS_TOKEN: ${{ secrets.C2_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          WORKOUT_DATE="$(TZ=Asia/Shanghai date -d 'yesterday' +%F)"
+          uv run download_history.py --date "$WORKOUT_DATE"
 
       # 保留 Python 生成的热力图 (用于仓库存档)
       - name: Generate Activity Heatmap (Static)
