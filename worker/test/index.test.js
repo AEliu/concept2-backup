@@ -272,6 +272,27 @@ test('duplicate dispatch skips backup, build, and deployment while manual runs p
   assert.match(deploy, /needs: backup-and-build/);
 });
 
+test('Pages deployment follows successful backup after a skipped manual preflight', () => {
+  const deploy = workflow.split('  deploy-pages:')[1].split('  mark-webhook-complete:')[0];
+  const gate = deploy.match(/^    if: \$\{\{ (.+) \}\}$/m)?.[1];
+  const parsed = gate?.match(/^!cancelled\(\) && needs\.backup-and-build\.result == '([^']+)'$/);
+  assert.ok(parsed, `Unexpected Pages deployment gate: ${gate}`);
+  assert.equal(parsed[1], 'success');
+
+  for (const [scenario, backupResult, cancelled, expected] of [
+    ['manual preflight skipped, backup succeeded', 'success', false, true],
+    ['webhook preflight succeeded, backup succeeded', 'success', false, true],
+    ['duplicate webhook skipped backup', 'skipped', false, false],
+    ['preflight failed and backup skipped', 'skipped', false, false],
+    ['backup failed', 'failure', false, false],
+    ['backup canceled', 'cancelled', true, false],
+    ['workflow canceled after backup succeeded', 'success', true, false]
+  ]) {
+    const deploys = !cancelled && backupResult === parsed[1];
+    assert.equal(deploys, expected, scenario);
+  }
+});
+
 test('only a successful deployment can upload a one-day completion marker', () => {
   const marker = workflow.split('  mark-webhook-complete:')[1];
   assert.match(marker, /needs: \[webhook-preflight, backup-and-build, deploy-pages\]/);

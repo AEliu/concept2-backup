@@ -294,6 +294,7 @@ jobs:
   # Job 2: 部署到 GitHub Pages
   deploy-pages:
     needs: backup-and-build
+    if: ${{ !cancelled() && needs.backup-and-build.result == 'success' }}
     
     permissions:
       pages: write
