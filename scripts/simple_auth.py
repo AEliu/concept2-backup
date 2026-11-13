@@ -23,6 +23,7 @@ from typing import Optional, Dict
 API_BASE = "https://log.concept2.com/api"
 RESULTS_URL = f"{API_BASE}/users/me/results"
 AUTH_TIMEOUT_SECONDS = 10
+MAX_SAFE_RESULT_ID = 2**53 - 1
 
 
 class SimpleConcept2AuthClient:
@@ -102,6 +103,7 @@ class SimpleConcept2API:
         page = 1
         total_pages = None
         expected_total = None
+        seen_ids = set()
 
         print(
             f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Fetching all results..."
@@ -155,6 +157,16 @@ class SimpleConcept2API:
                     or len(all_results) + count > total
                 ):
                     raise ValueError("Inconsistent Concept2 pagination metadata")
+                for result in results:
+                    if (
+                        not isinstance(result, dict)
+                        or type(result.get("id")) is not int
+                        or not 0 < result["id"] <= MAX_SAFE_RESULT_ID
+                    ):
+                        raise ValueError("Invalid Concept2 result ID")
+                    if result["id"] in seen_ids:
+                        raise ValueError("Duplicate Concept2 result ID")
+                    seen_ids.add(result["id"])
                 if expected_total is None:
                     expected_total = total
                     total_pages = reported_pages

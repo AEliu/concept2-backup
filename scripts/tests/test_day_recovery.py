@@ -289,6 +289,31 @@ class StrictPaginationTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         self.api.get_all_results(strict_pagination=True)
 
+    def test_invalid_or_duplicate_result_ids_fail_closed(self):
+        for name, result in (
+            ("non-object", "invalid"),
+            ("missing id", {"date": DAY}),
+            ("boolean id", {"id": True, "date": DAY}),
+            ("zero id", {"id": 0, "date": DAY}),
+            ("unsafe id", {"id": 2**53, "date": DAY}),
+        ):
+            with self.subTest(name=name):
+                with patch.object(
+                    simple_auth.requests,
+                    "get",
+                    return_value=page([result], 1, 1, 1),
+                ):
+                    with self.assertRaises(ValueError):
+                        self.api.get_all_results(strict_pagination=True)
+
+        with patch.object(
+            simple_auth.requests,
+            "get",
+            return_value=page([{"id": 111}, {"id": 111}], 2, 1, 1),
+        ):
+            with self.assertRaisesRegex(ValueError, "Duplicate"):
+                self.api.get_all_results(strict_pagination=True)
+
     def test_inconsistent_total_and_final_count_fail(self):
         for name, second in (
             ("total changed", page([{"id": 222}], 3, 2, 2)),
@@ -327,6 +352,32 @@ class StrictPaginationTests(unittest.TestCase):
         self.assertEqual(exit_status.exception.code, 1)
         self.assertEqual(get.call_count, 2)
         self.assertNotIn("No workout results found", output.getvalue())
+        self.assertEqual(stats.read_bytes(), before)
+        self.assertEqual(list(data_dir.rglob("*.tcx")), [])
+
+    def test_duplicate_id_across_pages_cannot_report_day_complete_or_write_data(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        data_dir = Path(temp.name) / "data"
+        data_dir.mkdir()
+        stats = data_dir / "stats.json"
+        stats.write_bytes(b'{"daily_distances":{"2026-11-11":1000}}')
+        before = stats.read_bytes()
+        responses = [
+            page([{"id": 111, "date": DAY}], 2, 1, 2),
+            page([{"id": 111, "date": DAY}], 2, 2, 2),
+        ]
+        with (
+            patch.object(simple_auth.requests, "get", side_effect=responses) as get,
+            contextlib.redirect_stdout(io.StringIO()) as output,
+            contextlib.redirect_stderr(io.StringIO()),
+            self.assertRaises(SystemExit) as exit_status,
+        ):
+            download_history.main(api=self.api, data_dir=data_dir, workout_date=DAY)
+
+        self.assertEqual(exit_status.exception.code, 1)
+        self.assertEqual(get.call_count, 2)
+        self.assertNotIn("Download Complete!", output.getvalue())
         self.assertEqual(stats.read_bytes(), before)
         self.assertEqual(list(data_dir.rglob("*.tcx")), [])
 
