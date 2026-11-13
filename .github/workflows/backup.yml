@@ -11,8 +11,13 @@ on:
         options:
           - full
           - single
+          - day
       result_id:
         description: 'Result ID (only needed for single mode)'
+        required: false
+        type: string
+      workout_date:
+        description: 'Workout date (YYYY-MM-DD, only needed for day mode)'
         required: false
         type: string
 
@@ -183,6 +188,14 @@ jobs:
         env:
           C2_ACCESS_TOKEN: ${{ secrets.C2_ACCESS_TOKEN }}
         run: uv run download_history.py
+
+      - name: Download day activities (manual trigger)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'day'
+        working-directory: scripts
+        env:
+          C2_ACCESS_TOKEN: ${{ secrets.C2_ACCESS_TOKEN }}
+          WORKOUT_DATE: ${{ github.event.inputs.workout_date }}
+        run: uv run download_history.py --date "$WORKOUT_DATE"
 
       # 保留 Python 生成的热力图 (用于仓库存档)
       - name: Generate Activity Heatmap (Static)

@@ -215,6 +215,16 @@ test('untrusted workflow IDs never enter shell source directly', () => {
   assert.doesNotMatch(commit.slice(commit.indexOf('        run: |')), /\$\{\{/);
 });
 
+test('manual day mode passes a date through env to the scoped history downloader', () => {
+  assert.match(workflow, /options:\n          - full\n          - single\n          - day\n/);
+  assert.match(workflow, /workout_date:\n        description: '[^']+'\n        required: false\n        type: string/);
+  const step = workflowStep('Download day activities (manual trigger)');
+  assert.match(step, /if: github\.event_name == 'workflow_dispatch' && github\.event\.inputs\.mode == 'day'/);
+  assert.match(step, /WORKOUT_DATE: \$\{\{ github\.event\.inputs\.workout_date \}\}/);
+  assert.match(step, /run: uv run download_history\.py --date "\$WORKOUT_DATE"/);
+  assert.doesNotMatch(step.slice(step.indexOf('        run:')), /\$\{\{/);
+});
+
 test('deletion dispatch never calls Concept2 and rejects unknown event types', () => {
   const validate = workflowStep('Validate repository dispatch');
   assert.match(validate, /result-added\|result-updated\|result-deleted\) ;;\s+\*\) echo "Invalid event type" >&2; exit 1/);

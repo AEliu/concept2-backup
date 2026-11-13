@@ -23,6 +23,7 @@ from typing import Optional, Dict
 API_BASE = "https://log.concept2.com/api"
 RESULTS_URL = f"{API_BASE}/users/me/results"
 AUTH_TIMEOUT_SECONDS = 10
+MAX_SAFE_RESULT_ID = 2**53 - 1
 
 
 class SimpleConcept2AuthClient:
@@ -94,11 +95,15 @@ class SimpleConcept2API:
 
         return response.json().get("data", {})
 
-    def get_all_results(self, per_page: int = 100) -> list:
-        """Get all workout results (supports pagination)"""
+    def get_all_results(
+        self, per_page: int = 100, strict_pagination: bool = False
+    ) -> list:
+        """Get all results; date recovery requires a complete pagination chain."""
         all_results = []
         page = 1
         total_pages = None
+        expected_total = None
+        seen_ids = set()
 
         print(
             f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Fetching all results..."
@@ -117,6 +122,65 @@ class SimpleConcept2API:
             response.raise_for_status()
 
             data = response.json()
+            if strict_pagination:
+                if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+                    raise ValueError("Invalid Concept2 results response")
+                results = data["data"]
+                meta = data.get("meta")
+                pagination = meta.get("pagination") if isinstance(meta, dict) else None
+                if not isinstance(pagination, dict):
+                    raise ValueError("Missing Concept2 pagination metadata")
+                total = pagination.get("total")
+                count = pagination.get("count")
+                current_page = pagination.get("current_page")
+                reported_pages = pagination.get("total_pages")
+                if (
+                    any(
+                        type(value) is not int
+                        for value in (total, count, current_page, reported_pages)
+                    )
+                    or total < 0
+                    or count != len(results)
+                    or current_page != page
+                    or (
+                        total == 0
+                        and (page != 1 or count != 0 or reported_pages not in (0, 1))
+                    )
+                    or (
+                        total > 0
+                        and (reported_pages < 1 or page > reported_pages or count == 0)
+                    )
+                    or (
+                        expected_total is not None
+                        and (total != expected_total or reported_pages != total_pages)
+                    )
+                    or len(all_results) + count > total
+                ):
+                    raise ValueError("Inconsistent Concept2 pagination metadata")
+                for result in results:
+                    if (
+                        not isinstance(result, dict)
+                        or type(result.get("id")) is not int
+                        or not 0 < result["id"] <= MAX_SAFE_RESULT_ID
+                    ):
+                        raise ValueError("Invalid Concept2 result ID")
+                    if result["id"] in seen_ids:
+                        raise ValueError("Duplicate Concept2 result ID")
+                    seen_ids.add(result["id"])
+                if expected_total is None:
+                    expected_total = total
+                    total_pages = reported_pages
+                all_results.extend(results)
+                print(
+                    f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Page {page}: {count} results"
+                )
+                if total == 0 or page == total_pages:
+                    if len(all_results) != total:
+                        raise ValueError("Incomplete Concept2 results pagination")
+                    break
+                page += 1
+                continue
+
             results = data.get("data", [])
             meta = data.get("meta", {})
             pagination = meta.get("pagination", {})

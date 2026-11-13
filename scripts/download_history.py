@@ -9,7 +9,7 @@ Prerequisites:
     - C2_ACCESS_TOKEN (your Concept2 Logbook API Access Token)
 
 Usage:
-    uv run download_history.py
+    uv run download_history.py [--date YYYY-MM-DD]
 
 The script will:
     1. Use the token to authenticate
@@ -17,9 +17,11 @@ The script will:
     3. Download missing TCX files to data/{Year}/{Date}_{ID}.tcx
 """
 
+import argparse
+import re
 import sys
 import time
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, Optional
 import requests
@@ -41,6 +43,21 @@ from download_single import update_tcx_file
 REQUEST_DELAY = 0.5  # Delay between API requests in seconds
 
 
+def validate_iso_date(value: str) -> str:
+    """Accept only a canonical, real ISO calendar date."""
+    if not isinstance(value, str) or not re.fullmatch(
+        r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value
+    ):
+        raise ValueError("Expected a date in YYYY-MM-DD format")
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError("Expected a real calendar date in YYYY-MM-DD format") from exc
+    if parsed.isoformat() != value:
+        raise ValueError("Expected a date in YYYY-MM-DD format")
+    return value
+
+
 def get_workout_date(result: Dict) -> Optional[str]:
     """Extract date from result in YYYY-MM-DD format"""
     date_str = result.get("date")
@@ -48,6 +65,36 @@ def get_workout_date(result: Dict) -> Optional[str]:
         # Format is typically "YYYY-MM-DD"
         return date_str.split(" ")[0] if " " in date_str else date_str
     return None
+
+
+def results_for_date(results: list, workout_date: str) -> list:
+    """Select a complete day's results without ignoring unknown metadata dates."""
+    selected = []
+    for result in results:
+        if not isinstance(result, dict) or not isinstance(result.get("date"), str):
+            raise ValueError("Result metadata has no valid date")
+        result_date = get_workout_date(result)
+        try:
+            validate_iso_date(result_date)
+        except ValueError as exc:
+            raise ValueError("Result metadata has no valid date") from exc
+        if result_date == workout_date:
+            selected.append(result)
+    return selected
+
+
+def ensure_day_recovery_isolated(data_dir: Path, results: list) -> None:
+    """Stop before a day run could reconcile files from another date."""
+    if any(data_dir.glob(".pending-update-*.json")):
+        raise ValueError("Pending activity update requires full recovery first")
+    paths_by_id: dict[int, set[Path]] = {}
+    for path in data_dir.rglob("*.tcx"):
+        if (stored_id := activity_id(path.name)) is not None:
+            paths_by_id.setdefault(stored_id, set()).add(path)
+    for result in results:
+        target = tcx_path(data_dir, result)
+        if paths_by_id.get(result["id"], set()) - {target}:
+            raise ValueError("Result already exists on another date; use full recovery")
 
 
 def save_tcx_file(data_dir: Path, result: Dict, tcx_content: bytes) -> Path:
@@ -151,8 +198,15 @@ def check_and_create_api_client():
         return None
 
 
-def main(api=None, data_dir: Path | None = None):
+def main(api=None, data_dir: Path | None = None, workout_date: str | None = None):
     """Main download workflow"""
+    if workout_date is not None:
+        try:
+            workout_date = validate_iso_date(workout_date)
+        except ValueError as exc:
+            print(f"Invalid date: {exc}", file=sys.stderr)
+            sys.exit(2)
+
     print("=== Concept2 Workout History Downloader ===\n")
 
     # 1. 初始化客户端
@@ -171,7 +225,19 @@ def main(api=None, data_dir: Path | None = None):
 
     try:
         # 2. 获取所有结果列表
-        results = api.get_all_results()
+        results = (
+            api.get_all_results(strict_pagination=True)
+            if workout_date is not None
+            else api.get_all_results()
+        )
+        if workout_date is not None:
+            if not isinstance(results, list):
+                raise ValueError("Invalid Concept2 result list")
+            results = results_for_date(results, workout_date)
+            if not results:
+                print(f"No workout results found for {workout_date}.")
+                sys.exit(0)
+            ensure_day_recovery_isolated(data_dir, results)
 
         if not results:
             print("No workout results found.")
@@ -215,4 +281,9 @@ def main(api=None, data_dir: Path | None = None):
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Download Concept2 workout history")
+    parser.add_argument(
+        "--date", metavar="YYYY-MM-DD", help="Reconcile one calendar day"
+    )
+    args = parser.parse_args()
+    main(workout_date=args.date)
