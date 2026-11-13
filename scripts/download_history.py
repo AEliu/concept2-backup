@@ -225,7 +225,11 @@ def main(api=None, data_dir: Path | None = None, workout_date: str | None = None
 
     try:
         # 2. 获取所有结果列表
-        results = api.get_all_results()
+        results = (
+            api.get_all_results(strict_pagination=True)
+            if workout_date is not None
+            else api.get_all_results()
+        )
         if workout_date is not None:
             if not isinstance(results, list):
                 raise ValueError("Invalid Concept2 result list")

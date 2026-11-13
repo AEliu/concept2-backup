@@ -8,9 +8,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import download_history
+import simple_auth
 
 
 DAY = "2026-11-12"
@@ -25,15 +26,33 @@ def tcx(distance: int) -> bytes:
     ).encode()
 
 
+def page(results: list, total: int, number: int, pages: int) -> Mock:
+    response = Mock()
+    response.json.return_value = {
+        "data": results,
+        "meta": {
+            "pagination": {
+                "total": total,
+                "count": len(results),
+                "current_page": number,
+                "total_pages": pages,
+            }
+        },
+    }
+    return response
+
+
 class FakeAPI:
     def __init__(self, results: list, contents: dict[int, bytes | Exception]):
         self.results = results
         self.contents = contents
         self.listed = 0
+        self.strict_flags = []
         self.downloaded = []
 
-    def get_all_results(self):
+    def get_all_results(self, strict_pagination=False):
         self.listed += 1
+        self.strict_flags.append(strict_pagination)
         return self.results
 
     def download_tcx(self, result_id):
@@ -85,6 +104,7 @@ class DayRecoveryTests(unittest.TestCase):
         output = self.run_day(api)
 
         self.assertEqual(api.listed, 1)
+        self.assertEqual(api.strict_flags, [True])
         self.assertEqual(api.downloaded, [222])
         self.assertEqual(existing.read_bytes(), tcx(1000))
         self.assertEqual(self.path(DAY, 222).read_bytes(), tcx(2000))
@@ -209,6 +229,106 @@ class DayRecoveryTests(unittest.TestCase):
         self.assertEqual(api.downloaded, [])
         self.assertEqual(journal.read_text(encoding="utf-8"), "{}")
         self.assertFalse(self.path(DAY, 111).exists())
+
+
+class StrictPaginationTests(unittest.TestCase):
+    def setUp(self):
+        self.api = simple_auth.SimpleConcept2API(
+            simple_auth.SimpleConcept2AuthClient("synthetic-test-token")
+        )
+
+    def test_reads_every_consistent_page(self):
+        responses = [
+            page([{"id": 111, "date": "2026-11-11"}], 2, 1, 2),
+            page([{"id": 222, "date": DAY}], 2, 2, 2),
+        ]
+        with patch.object(simple_auth.requests, "get", side_effect=responses) as get:
+            results = self.api.get_all_results(strict_pagination=True)
+
+        self.assertEqual([result["id"] for result in results], [111, 222])
+        self.assertEqual(
+            [call.kwargs["params"]["page"] for call in get.call_args_list], [1, 2]
+        )
+
+    def test_zero_results_requires_consistent_pagination(self):
+        for pages in (0, 1):
+            with self.subTest(pages=pages):
+                with patch.object(
+                    simple_auth.requests, "get", return_value=page([], 0, 1, pages)
+                ) as get:
+                    self.assertEqual(
+                        self.api.get_all_results(strict_pagination=True), []
+                    )
+                get.assert_called_once()
+
+    def test_missing_or_inconsistent_page_metadata_fails_closed(self):
+        cases = (
+            ("missing pagination", {"data": [], "meta": {}}),
+            (
+                "missing count",
+                {
+                    "data": [],
+                    "meta": {
+                        "pagination": {"total": 0, "current_page": 1, "total_pages": 0}
+                    },
+                },
+            ),
+            ("wrong current page", page([{"id": 1}], 1, 2, 2).json.return_value),
+            ("count mismatch", page([{"id": 1}], 1, 1, 1).json.return_value),
+            ("empty page with nonzero total", page([], 1, 1, 2).json.return_value),
+            ("invalid total pages", page([{"id": 1}], 1, 1, 0).json.return_value),
+            ("boolean total", page([], True, 1, 1).json.return_value),
+        )
+        for name, body in cases:
+            with self.subTest(name=name):
+                if name == "count mismatch":
+                    body["meta"]["pagination"]["count"] = 2
+                fake = Mock()
+                fake.json.return_value = body
+                with patch.object(simple_auth.requests, "get", return_value=fake):
+                    with self.assertRaises(ValueError):
+                        self.api.get_all_results(strict_pagination=True)
+
+    def test_inconsistent_total_and_final_count_fail(self):
+        for name, second in (
+            ("total changed", page([{"id": 222}], 3, 2, 2)),
+            ("final count short", page([{"id": 222}], 3, 2, 2)),
+        ):
+            with self.subTest(name=name):
+                first_total = 2 if name == "total changed" else 3
+                first = page([{"id": 111}], first_total, 1, 2)
+                with patch.object(
+                    simple_auth.requests, "get", side_effect=(first, second)
+                ):
+                    with self.assertRaises(ValueError):
+                        self.api.get_all_results(strict_pagination=True)
+
+    def test_empty_middle_page_cannot_report_day_complete_or_write_data(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        data_dir = Path(temp.name) / "data"
+        data_dir.mkdir()
+        stats = data_dir / "stats.json"
+        stats.write_bytes(b'{"daily_distances":{"2026-11-11":1000}}')
+        before = stats.read_bytes()
+        responses = [
+            page([{"id": 111, "date": "2026-11-11"}], 2, 1, 3),
+            page([], 2, 2, 3),
+            page([{"id": 222, "date": DAY}], 2, 3, 3),
+        ]
+        with (
+            patch.object(simple_auth.requests, "get", side_effect=responses) as get,
+            contextlib.redirect_stdout(io.StringIO()) as output,
+            contextlib.redirect_stderr(io.StringIO()),
+            self.assertRaises(SystemExit) as exit_status,
+        ):
+            download_history.main(api=self.api, data_dir=data_dir, workout_date=DAY)
+
+        self.assertEqual(exit_status.exception.code, 1)
+        self.assertEqual(get.call_count, 2)
+        self.assertNotIn("No workout results found", output.getvalue())
+        self.assertEqual(stats.read_bytes(), before)
+        self.assertEqual(list(data_dir.rglob("*.tcx")), [])
 
 
 if __name__ == "__main__":
