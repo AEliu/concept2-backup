@@ -25,7 +25,8 @@ test('Concept2 credential is exposed only to API calling steps', () => {
       'Validate Concept2 Access Token',
       'Download single activity (repository dispatch)',
       'Download single activity (manual trigger)',
-      'Download full history (manual trigger)'
+      'Download full history (manual trigger)',
+      'Download day activities (manual trigger)'
     ])],
     [history, new Set(['Validate Concept2 Access Token', 'Download full workout history'])]
   ]) {
