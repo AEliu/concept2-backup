@@ -26,7 +26,8 @@ test('Concept2 credential is exposed only to API calling steps', () => {
       'Download single activity (repository dispatch)',
       'Download single activity (manual trigger)',
       'Download full history (manual trigger)',
-      'Download day activities (manual trigger)'
+      'Download day activities (manual trigger)',
+      "Reconcile yesterday's activities (scheduled)"
     ])],
     [history, new Set(['Validate Concept2 Access Token', 'Download full workout history'])]
   ]) {
@@ -65,7 +66,7 @@ test('queued writers check out the current branch head instead of the event SHA'
     assert.match(checkout, /ref: \$\{\{ github\.ref \}\}/);
     assert.doesNotMatch(checkout, /github\.sha|GITHUB_SHA|github\.ref_name/);
   }
-  assert.match(backup, /backup-and-build:\n    needs: webhook-preflight\n    if: \$\{\{ always\(\) && github\.ref_type == 'branch' &&/);
+  assert.match(backup, /backup-and-build:\n    needs: webhook-preflight\n    if: \$\{\{ !cancelled\(\) && github\.ref_type == 'branch' &&/);
   assert.match(history, /download-history:\n    if: github\.ref_type == 'branch'/);
 });
 
