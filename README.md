@@ -24,7 +24,7 @@ Concept2 Webhook
         -> web/ 构建并部署 Pages
 ```
 
-如果不配置 Webhook，也可以手动触发工作流做全量或单条下载。
+如果不配置 Webhook，也可以手动触发工作流做全量、单条或指定日期下载；定时任务每天核对前一天的活动。
 
 ## 目录结构
 
@@ -59,11 +59,13 @@ Concept2 Webhook
 
 - `repository_dispatch`（由 Worker 触发）
 - `workflow_dispatch`（手动触发）
+- `schedule`（每天核对前一天的活动，按北京时间计算日期）
 
 手动触发参数：
 
 - `mode=full`：全量下载历史
 - `mode=single` + `result_id`：下载单条训练
+- `mode=day` + `workout_date`（`YYYY-MM-DD`）：核对指定日期的全部训练，只补缺失项
 
 执行内容：
 
@@ -107,18 +109,23 @@ pnpm build
 
 ```bash
 cd worker
-npm install
-wrangler login
-wrangler secret put GITHUB_PAT
-wrangler dev --port 8787
-wrangler deploy
+npm ci
+npm test
 ```
 
-`GITHUB_PAT` 需要有目标仓库的 Actions/contents 相关权限，以便调用 repository dispatch。
+生产配置时在 `worker/` 下执行 `npx wrangler login`、`npx wrangler secret put GITHUB_PAT` 和 `npx wrangler secret put WEBHOOK_SECRET`。为 `WEBHOOK_SECRET` 生成至少 32 字节的密码学随机值，并编码为 base64url（32 字节对应 43 个字符）；Worker 只接受 43–128 个 base64url 字符。将它作为 Worker Secret 保存，并把**同一值**填入下方的 Webhook URL。不要把真实值写进仓库、Issue、截图或日志。`GITHUB_PAT` 是 Worker 调用目标仓库 repository dispatch 的令牌：细粒度 PAT 授予该仓库 **Contents: write**，传统 PAT 需要 `repo` scope；无需为这个 API 额外授予 Actions 权限。`C2_ACCESS_TOKEN` 只存于 GitHub Actions Secrets，供下载脚本读取 Concept2 API。Worker 的速率限制绑定见 `worker/wrangler.toml`；部署前应核对其 namespace ID 在 Cloudflare 账户中唯一。
+
+部署 Worker 前请检查 [Worker 专用说明](worker/README.md)，并按生产变更流程执行 `wrangler deploy`。
 
 ## Webhook 配置
 
-在 Concept2 开发者页面配置 webhook URL 为你的 Worker 地址（例如 `https://<worker>.workers.dev`）。
+在 Concept2 开发者页面，为目标 OAuth 应用配置**完整**的 Webhook URL：
+
+```text
+https://<your-worker-host>/webhook/<WEBHOOK_SECRET>
+```
+
+Worker 只接受这个精确路径上的 POST；只填 Worker 根地址会得到 401。然后确认当前 Logbook 账户已授权**配置该 Webhook URL 的同一个应用**：在 `Edit Profile → Applications → Clients` 查找该应用。必要时使用该应用开发者页面上的 OAuth Link 完成授权。GitHub Actions 中个人 `C2_ACCESS_TOKEN` 有效，仅说明下载 API 可用，不能代替这个应用授权。Concept2 [官方说明](https://log.concept2.com/developers/documentation/#webhooks)只向授权了该应用的用户发送训练事件。
 
 当前 Worker 会处理：
 
@@ -126,7 +133,7 @@ wrangler deploy
 - `result-updated`
 - `result-deleted`
 
-并统一触发 `c2_new_activity` 事件，附带 `result_id`。
+官方请求体是 `data` 包络：新增/更新的 ID 为 `data.result.id`，删除的 ID 为 `data.result_id`。Worker 验证后触发 GitHub 的 `c2_new_activity` 事件，传递 `result_id`、`event_type` 和 `event_digest`。
 
 ## 数据产物
 
@@ -136,8 +143,9 @@ wrangler deploy
 
 ## 常见问题
 
-- 401 鉴权失败：检查 `C2_ACCESS_TOKEN` 是否有效
-- webhook 未触发：检查 Worker 日志（`wrangler tail`）与 `GITHUB_PAT`
+- GitHub Actions 的 Concept2 API 校验报 401：检查 `C2_ACCESS_TOKEN`；Worker 的 POST 返回 401：检查 Webhook URL 的路径与 Worker `WEBHOOK_SECRET` 是否一致
+- 新活动未即时触发：先核对同一 Concept2 应用是否已授权，再查看 Worker 的真实 POST 请求和 GitHub Actions 的 `repository_dispatch` 运行。直接调用 GitHub repository dispatch 仅验证 GitHub 侧；`schedule` 补录成功也不能证明即时 Webhook 正常
+- 调试 Worker 时，原始 `wrangler tail` 事件可能含带密钥的完整请求 URL。只记录脱敏后的时间、HTTP 状态、`X-Request-Id` 和错误短语，不发布原始日志
 - 前端没有数据：确认 `web/public/stats.json` 已注入最新数据（CI 中会自动复制）
 
 ## 相关文档
