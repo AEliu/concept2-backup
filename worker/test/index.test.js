@@ -22,6 +22,10 @@ function event(type, id, extra = {}) {
     : { data: { type, result: { id, user_id: 1, ...extra } } };
 }
 
+function liveEvent(type, id, extra = {}) {
+  return event(type, id, extra).data;
+}
+
 function setup(t, options = {}) {
   const dispatches = [];
   const logs = [];
@@ -81,6 +85,27 @@ for (const [type, id] of [
       client_payload: { result_id: id, event_type: type, event_digest: eventKeys[0] }
     }]);
   });
+
+  test(`accepts live unwrapped ${type} event`, async (t) => {
+    const { deliver, dispatches, eventKeys } = setup(t);
+    assert.equal((await deliver(liveEvent(type, id))).status, 200);
+    assert.deepEqual(dispatches, [{
+      event_type: 'c2_new_activity',
+      client_payload: { result_id: id, event_type: type, event_digest: eventKeys[0] }
+    }]);
+  });
+
+  test(`deduplicates wrapped and unwrapped ${type} events`, async (t) => {
+    const { deliver, dispatches, eventKeys } = setup(t);
+    assert.equal((await deliver(liveEvent(type, id))).status, 200);
+    const wrapped = event(type, id);
+    const replay = await deliver(wrapped);
+    assert.equal(replay.status, 503);
+    assert.equal(replay.headers.get('Retry-After'), '60');
+    assert.equal(eventKeys[0], eventKeys[1]);
+    assert.match(eventKeys[0], /^[a-f0-9]{64}$/);
+    assert.equal(dispatches.length, 1);
+  });
 }
 
 for (const id of ['$(echo injected)', '123; echo injected', '123', 0, -1, 1.5,
@@ -120,6 +145,15 @@ test('rejects wrong secret before reading malformed JSON', async (t) => {
   assert.equal(dispatches.length, 0);
 });
 
+test('rejects malformed authenticated JSON without logging untrusted fields', async (t) => {
+  const { deliver, dispatches, logs, totalKeys } = setup(t);
+  const response = await deliver(null, { body: '{"private workout comment":' });
+  assert.equal(response.status, 400);
+  assert.equal(dispatches.length, 0);
+  assert.equal(totalKeys.length, 0);
+  assert.doesNotMatch(logs.join('\n'), /private workout comment/);
+});
+
 test('rejects oversized body', async (t) => {
   const { deliver, dispatches } = setup(t);
   const response = await deliver(event('result-added', 1, { comments: 'x'.repeat(65_536) }));
@@ -128,7 +162,15 @@ test('rejects oversized body', async (t) => {
 });
 
 for (const payload of [
-  { type: 'result-added', result: { id: 1 } },
+  { type: 'result-added', result: { id: 1 }, data: { type: 'result-added', result: { id: 1 } } },
+  { data: { type: 'result-added', result: { id: 1 } }, source: 'unexpected' },
+  { type: 'result-added', result: { id: 1 }, source: 'unexpected' },
+  { type: 'result-deleted', result_id: 1, result: { id: 1 } },
+  { type: 'result-added', result: { id: 1 }, result_id: 1 },
+  { type: 'unknown', result: { id: 1 } },
+  { type: 'result-added', result: [] },
+  { type: 'result-added', result: { id: '$(echo injected)' } },
+  { type: 'result-deleted', result_id: Number.MAX_SAFE_INTEGER + 1 },
   { data: { type: 'unknown', result: { id: 1 } } },
   { data: { type: 'result-deleted', result_id: 1, result: { id: 1 } } },
   { data: { type: 'result-added', result: { id: 1 }, result_id: 1 } },
@@ -155,14 +197,14 @@ test('limits valid deliveries before dispatch', async (t) => {
 
 test('defers replayed canonical payload with retry response', async (t) => {
   const { deliver, dispatches, eventKeys } = setup(t);
-  assert.equal((await deliver(event('result-updated', 4, { comments: 'safe' }))).status, 200);
+  assert.equal((await deliver(liveEvent('result-updated', 4, { comments: 'safe' }))).status, 200);
   const replay = await deliver({ data: { result: { comments: 'safe', user_id: 1, id: 4 }, type: 'result-updated' } });
   assert.equal(replay.status, 503);
   assert.equal(replay.headers.get('Retry-After'), '60');
   assert.equal(eventKeys[0], eventKeys[1]);
   assert.match(eventKeys[0], /^[a-f0-9]{64}$/);
   assert.equal(dispatches.length, 1);
-  assert.equal((await deliver(event('result-updated', 4, { comments: 'changed' }))).status, 200);
+  assert.equal((await deliver(liveEvent('result-updated', 4, { comments: 'changed' }))).status, 200);
   assert.equal(dispatches.length, 2);
 });
 
@@ -182,7 +224,7 @@ test('failed GitHub dispatch remains retryable after the limiter window', async 
 
 test('logs omit secret, token, and personal event fields', async (t) => {
   const { deliver, logs } = setup(t);
-  assert.equal((await deliver(event('result-added', 42, {
+  assert.equal((await deliver(liveEvent('result-added', 42, {
     comments: 'private workout comment', user_id: 987654
   }))).status, 200);
   const output = logs.join('\n');
