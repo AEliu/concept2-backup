@@ -18,17 +18,23 @@ function isValidResultId(value) {
 }
 
 function parseEvent(body) {
-  if (!isObject(body) || Object.keys(body).length !== 1 || !isObject(body.data)) return null;
-  const data = body.data;
-  if (!EVENT_TYPES.has(data.type)) return null;
+  if (!isObject(body)) return null;
+
+  // Concept2's documented envelope contains `data`, while live deliveries
+  // have also used the event object directly. Reject mixed or extra fields.
+  let data = body;
+  if (Object.hasOwn(body, 'data')) {
+    if (Object.keys(body).length !== 1 || !isObject(body.data)) return null;
+    data = body.data;
+  }
+  if (Object.keys(data).length !== 2 || !EVENT_TYPES.has(data.type)) return null;
 
   if (data.type === 'result-deleted') {
-    if (Object.keys(data).length !== 2 || !isValidResultId(data.result_id)) return null;
+    if (!isValidResultId(data.result_id)) return null;
     return { eventType: data.type, resultId: data.result_id, data };
   }
 
-  if (Object.keys(data).length !== 2 || !isObject(data.result) ||
-      !isValidResultId(data.result.id)) return null;
+  if (!isObject(data.result) || !isValidResultId(data.result.id)) return null;
   return { eventType: data.type, resultId: data.result.id, data };
 }
 
