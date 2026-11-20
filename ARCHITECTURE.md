@@ -25,7 +25,7 @@
    `WEBHOOK_SECRET` 应由至少 32 字节密码学随机数编码为 base64url；32 字节得到 43 个字符。将同一值保存为 Worker Secret。Worker 只接受该精确路径的 POST；根地址无法接收事件。不要把真实地址或密钥写进仓库、日志、Issue 或截图。
 
 2. 训练所属 Logbook 账户必须授权**配置上述 URL 的同一个应用**。在 `Edit Profile → Applications → Clients` 核对；如缺失，使用该应用的 OAuth Link 完成授权。Concept2 只向获授权应用投递相关用户的事件。[Concept2 Webhook 文档](https://log.concept2.com/developers/documentation/#webhooks)
-3. Concept2 发送 JSON `data` 包络。新增或更新事件的 `data.type` 为 `result-added`/`result-updated`，ID 在 `data.result.id`；删除事件为 `result-deleted`，ID 在 `data.result_id`。Worker 对请求体限制为 64 KiB，验证事件类型和正整数 ID，并以规范化 `data` 的 SHA-256 值生成 `event_digest`。
+3. Concept2 官方文档展示 JSON `data` 包络；[历史生产投递的修复记录](https://github.com/AEliu/concept2-backup/commit/6e85ed23ef956715014f1663a445b928e4361929)证明它也曾发送顶层事件对象。Worker 仅接受这两种明确格式：新增/更新的 `type` 为 `result-added`/`result-updated`，ID 在 `result.id`；删除为 `result-deleted`，ID 在 `result_id`。有包络时这些字段位于 `data` 内，无包络时位于顶层。Worker 限制请求体为 64 KiB，验证事件类型和正整数 ID，对等价事件对象生成相同的 SHA-256 `event_digest`。
 4. Worker 对有效请求进行限速后，向 `AEliu/concept2-backup` 发送 `c2_new_activity` repository dispatch，`client_payload` 包含 `result_id`、`event_type` 和 `event_digest`。Worker 返回 200 表示 GitHub 接受了转发请求；最终备份结果仍要查看 Actions。
 5. `backup.yml` 的预检对有效且未完成的 digest 运行备份。成功完成备份及 Pages 部署后上传一天保留的完成标记。相同 digest 在标记有效期内再次到达时跳过；标记过期后仍依赖下载与统计逻辑的幂等性。
 
@@ -55,7 +55,7 @@ Worker 使用两个 Cloudflare 限速绑定：总体约每 60 秒 10 次、同�
 | --- | --- |
 | Worker 没有对应 POST | 开发者应用保存的域名与完整路径；训练账户是否授权同一个应用 |
 | POST 返回 401 | URL 路径与 Worker `WEBHOOK_SECRET` 是否一致 |
-| POST 返回 400/413 | 官方 `data` 包络及请求体大小 |
+| POST 返回 400/413 | 两种受限事件格式的字段与请求体大小；核对脱敏后的结构，不记录原始训练内容 |
 | POST 返回 429 或 503 `Delivery deferred` | Worker 限速；等待重试，不将其计作成功 |
 | POST 返回 503 `Service unavailable` | Worker Secrets 或两个限速绑定 |
 | POST 返回 503 `Dispatch unavailable` | Worker `GITHUB_PAT` 的目标仓库与权限、GitHub API 或网络 |

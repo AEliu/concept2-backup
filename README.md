@@ -133,7 +133,7 @@ Worker 只接受这个精确路径上的 POST；只填 Worker 根地址会得到
 - `result-updated`
 - `result-deleted`
 
-官方请求体是 `data` 包络：新增/更新的 ID 为 `data.result.id`，删除的 ID 为 `data.result_id`。Worker 验证后触发 GitHub 的 `c2_new_activity` 事件，传递 `result_id`、`event_type` 和 `event_digest`。
+Concept2 官方文档给出 `data` 包络（新增/更新 ID 在 `data.result.id`，删除 ID 在 `data.result_id`），但[历史生产投递](https://github.com/AEliu/concept2-backup/commit/6e85ed23ef956715014f1663a445b928e4361929)曾使用无包络的顶层 `type`、`result` 或 `result_id`。Worker 兼容这两种受限格式，并将等价事件规范化后触发 GitHub 的 `c2_new_activity`，传递 `result_id`、`event_type` 和 `event_digest`。
 
 ## 数据产物
 
