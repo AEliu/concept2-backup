@@ -1,255 +1,149 @@
-import React, { useEffect, useState } from 'react';
-import { StatsData, DerivedStats } from './types';
-import { calculateDerivedStats } from './utils/statsCalculator';
-import { StatCard } from './components/StatCard';
-import { Heatmap } from './components/Heatmap';
+import { useEffect, useState, type MouseEvent } from 'react';
+import { ActivityDay, ActivityPage, dayHref } from './components/ActivityPages';
 import { Header } from './components/Header';
+import { Heatmap } from './components/Heatmap';
 import { PWAToast } from './components/PWAToast';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
+import { StatCard } from './components/StatCard';
+import { TrainingVolume } from './components/TrainingVolume';
+import { useJson } from './hooks/useJson';
 import { usePWA } from './hooks/usePWA';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import type { DailyDistances, StatsData } from './types';
+import { addDays, dailyVolume, dateLabel, todayKey } from './utils/calendar';
+import { distanceKm, distanceMeters } from './utils/format';
+import { calculateDerivedStats } from './utils/statsCalculator';
 
-const MOCK_DATA: StatsData = {
-  daily_distances: {
-    "2024-11-20": 5000,
-    "2024-11-21": 5200,
-    "2024-11-22": 4047,
-    "2024-11-23": 4328,
-    "2024-11-24": 2000,
-    "2024-11-25": 5000,
-    "2024-11-26": 1085,
-    "2024-11-27": 5900,
-    "2024-11-28": 6000,
-    "2024-11-29": 2000,
-    "2024-11-30": 8000
+type Route = { page: 'dashboard' } | { page: 'day'; date: string } | { page: 'activity'; id: string };
+
+function readRoute(search: string): Route {
+  const query = new URLSearchParams(search);
+  const id = query.get('activity');
+  if (id && /^[1-9]\d{0,15}$/.test(id)) return { page: 'activity', id };
+  const date = query.get('date');
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const parsed = new Date(`${date}T00:00:00Z`);
+    if (!Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date) {
+      return { page: 'day', date };
+    }
   }
-};
+  return { page: 'dashboard' };
+}
 
-const App: React.FC = () => {
-  const [data, setData] = useState<StatsData | null>(null);
-  const [stats, setStats] = useState<DerivedStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isDemoMode, setIsDemoMode] = useState(false);
+function demoDistances(today: string): DailyDistances {
+  return Object.fromEntries([5000, 5200, 4047, 4328, 2000, 5900, 6000, 2000, 8000]
+    .map((meters, index) => [addDays(today, -((8 - index) * 3)), meters]));
+}
 
+function Dashboard({ onDay }: { onDay: (date: string) => void }) {
+  const resource = useJson<StatsData>('stats.json');
+  const today = todayKey();
+
+  if (resource.status === 'loading') return <p className="panel page-message" role="status">Loading training data…</p>;
+
+  const demo = resource.status === 'error';
+  const data = resource.status === 'ready' ? resource.data.daily_distances : demoDistances(today);
+  const stats = calculateDerivedStats(data);
+  const recent = dailyVolume(data, today);
+  const recentTotal = recent.reduce((sum, day) => sum + day.meters, 0);
+  const daysLogged = recent.filter(day => day.meters > 0).length;
+  const lastRecords = Object.entries(data).filter(([date, meters]) => date <= today && meters > 0)
+    .sort(([first], [second]) => second.localeCompare(first)).slice(0, 5);
+
+  return (
+    <>
+      {demo && <p className="demo-banner" role="status">Demo data · live training data is unavailable.</p>}
+      <dl className="metric-strip dashboard-metrics" aria-label="Training overview">
+        <StatCard label="Distance · 30 days" value={distanceKm(recentTotal)} unit="km" accent />
+        <StatCard label="Training days · 30 days" value={daysLogged} unit="/ 30" />
+        <StatCard label="This month" value={distanceKm(stats.thisMonthDistance)} unit="km" />
+        <StatCard label="Last training day" value={lastRecords[0] ? dateLabel(lastRecords[0][0]) : '—'} />
+      </dl>
+      <div className="dashboard-panels">
+        <TrainingVolume data={data} today={today} onDay={demo ? undefined : onDay} />
+        <section className="panel recent-panel" aria-labelledby="recent-heading">
+          <div className="panel-header">
+            <div>
+              <h2 id="recent-heading">Recent records</h2>
+              <p className="panel-caption">Distance by training day</p>
+            </div>
+          </div>
+          {lastRecords.length ? (
+            <ul className="record-list">
+              {lastRecords.map(([date, meters]) => (
+                <li key={date}>
+                  {demo ? <div className="demo-record"><time dateTime={date}>{dateLabel(date)}</time><span>{distanceMeters(meters)} m</span></div>
+                    : <a href={dayHref(date)} data-route aria-label={`${dateLabel(date, { month: 'long', day: 'numeric', year: 'numeric' })}, ${distanceMeters(meters)} meters`}>
+                    <time dateTime={date}>{dateLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}</time>
+                    <span>{distanceMeters(meters)} m <span aria-hidden="true">→</span></span>
+                  </a>}
+                </li>
+              ))}
+            </ul>
+          ) : <p className="page-message">No training records yet.</p>}
+        </section>
+        <Heatmap data={data} today={today} dayHref={demo ? undefined : dayHref} />
+      </div>
+      <section className="long-term" aria-labelledby="history-heading">
+        <h2 id="history-heading">Training history</h2>
+        <dl className="metric-strip history-metrics">
+          <StatCard label="This year" value={distanceKm(stats.thisYearDistance)} unit="km" />
+          <StatCard label="All time" value={distanceKm(stats.totalDistance)} unit="km" />
+          <StatCard label="Current streak" value={stats.currentStreak} unit="days" />
+          <StatCard label="Longest streak" value={stats.maxStreak} unit="days" />
+        </dl>
+      </section>
+    </>
+  );
+}
+
+function DayRoute({ date }: { date: string }) {
+  const resource = useJson<StatsData>('stats.json');
+  return <ActivityDay date={date} distance={resource.status === 'ready' ? resource.data.daily_distances[date] : undefined} />;
+}
+
+function App() {
+  const [search, setSearch] = useState(() => window.location.search);
+  const route = readRoute(search);
   const { needRefresh, offlineReady, updateServiceWorker } = usePWA();
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch('./stats.json');
-        if (!response.ok) throw new Error("Network response was not ok");
-        const jsonData: StatsData = await response.json();
-        setData(jsonData);
-      } catch (err) {
-        console.warn("Using demo data.");
-        setData(MOCK_DATA);
-        setIsDemoMode(true);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+    const onPopState = () => setSearch(window.location.search);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  useEffect(() => {
-    if (data) {
-      setStats(calculateDerivedStats(data.daily_distances));
-    }
-  }, [data]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#f3f3f1] flex items-center justify-center">
-        <div className="font-mono text-xs uppercase animate-pulse">Initializing System...</div>
-      </div>
-    );
+  function navigate(href: string) {
+    const url = new URL(href, window.location.href);
+    if (url.search === window.location.search) return;
+    window.history.pushState(null, '', url);
+    setSearch(url.search);
+    window.scrollTo(0, 0);
+    document.getElementById('page-content')?.focus({ preventScroll: true });
   }
 
-  const recentActivity = data ? Object.entries(data.daily_distances)
-    .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
-    .slice(-30)
-    .map(([date, meters]) => ({
-      date: date.substring(5),
-      meters
-    })) : [];
+  function handleLink(event: MouseEvent<HTMLDivElement>) {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const link = (event.target as Element).closest<HTMLAnchorElement>('a[data-route]');
+    if (!link) return;
+    event.preventDefault();
+    navigate(link.href);
+  }
 
   return (
-    <div className="min-h-screen bg-[#f3f3f1] font-sans text-[#1a1a1a] pb-24">
-      <Header />
-
-      <main className="max-w-7xl mx-auto border-l border-r border-black">
-
-        {/* Demo Warning - Minimal */}
-        {isDemoMode && (
-          <div className="border-b border-black p-2 bg-black text-white text-center font-mono text-[10px] uppercase tracking-widest">
-            :: Demo Mode Active :: Local Data Not Found ::
-          </div>
-        )}
-
-        {/* 01 :: OVERVIEW GRID */}
-        <section className="border-b border-black">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-black">
-
-            {stats && (
-              <>
-                <div className="border-black">
-                  <StatCard
-                    index="01"
-                    label="Streak"
-                    value={`${stats.currentStreak}`}
-                    subValue={stats.currentStreak > 0 ? "Rowing" : "Inactive"}
-                  />
-                </div>
-                <div className="border-black">
-                  <StatCard
-                    index="02"
-                    label="Mo. Volume"
-                    value={(stats.thisMonthDistance / 1000).toLocaleString(undefined, {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2
-                    })}
-                    subValue="Kilometers"
-                  />
-                </div>
-                <div className="border-black">
-                  <StatCard
-                    index="03"
-                    label="Yr. Volume"
-                    value={(stats.thisYearDistance / 1000).toLocaleString(undefined, {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2
-                    })}
-                    subValue="Kilometers"
-                  />
-                </div>
-                <div className="border-black bg-black text-white">
-                  {/* Inverted Card for Emphasis */}
-                  <div className="relative flex flex-col justify-between p-6 h-48">
-                    <div className="flex justify-between items-start border-b border-gray-700 pb-2 mb-4">
-                      <span className="font-mono text-xs font-bold uppercase tracking-widest text-gray-400">04 :: All Time</span>
-                    </div>
-                    <div className="mt-auto">
-                      <div className="font-serif text-5xl leading-none text-white">
-                        {(stats.totalDistance / 1000).toLocaleString(undefined, {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2
-                    })}
-                      </div>
-                      <div className="font-mono text-xs text-gray-400 mt-2 uppercase tracking-wide border-l-2 border-white pl-2 ml-1">
-                        Kilometers
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </section>
-
-        {/* 02 :: VISUALIZATION */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 border-b border-black">
-
-          {/* HEATMAP - Spans 2 cols */}
-          <div className="lg:col-span-2 border-b lg:border-b-0 lg:border-r border-black p-8">
-            <div className="flex justify-between items-end mb-8">
-              <div>
-                <span className="font-mono text-xs text-gray-500 uppercase block mb-1">05 :: Frequency</span>
-                <h2 className="font-serif text-3xl">Activity Heatmap</h2>
-              </div>
-              <div className="hidden md:flex gap-1 font-mono text-[10px] text-gray-400 uppercase tracking-wider">
-                <span>Low</span>
-                <span className="text-black">High</span>
-              </div>
-            </div>
-            {data && <Heatmap data={data.daily_distances} />}
-          </div>
-
-          {/* BAR CHART */}
-          <div className="p-8 bg-white">
-            <div className="flex justify-between items-end mb-8">
-              <div>
-                <span className="font-mono text-xs text-gray-500 uppercase block mb-1">06 :: Intensity</span>
-                <h2 className="font-serif text-3xl">Last 30 Days</h2>
-              </div>
-            </div>
-            <div className="h-48 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={recentActivity}>
-                  <CartesianGrid strokeDasharray="1 3" vertical={false} stroke="#e5e5e5" />
-                  <XAxis
-                    dataKey="date"
-                    stroke="#999"
-                    fontSize={10}
-                    tickLine={false}
-                    axisLine={false}
-                    fontFamily="'Space Mono', monospace"
-                    interval={6}
-                  />
-                  <Tooltip
-                    cursor={{ fill: '#f3f3f1' }}
-                    contentStyle={{
-                      backgroundColor: '#000',
-                      border: 'none',
-                      color: '#fff',
-                      fontFamily: "'Space Mono', monospace",
-                      fontSize: '12px',
-                      padding: '4px 8px'
-                    }}
-                    itemStyle={{ color: '#fff' }}
-                  />
-                  <Bar dataKey="meters" fill="#1a1a1a" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </section>
-
-        {/* 03 :: FOOTER DETAILS */}
-        <section className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x border-b border-black divide-black">
-          <div className="p-8">
-            <span className="font-mono text-xs text-gray-500 uppercase block mb-4">07 :: Consistency Index</span>
-            <div className="flex items-center gap-4">
-              <div className="font-serif text-6xl">
-                {stats?.maxStreak}
-              </div>
-              <div className="font-mono text-xs text-gray-500 leading-relaxed">
-                MAX CONSECUTIVE<br />
-                DAYS RECORDED
-              </div>
-            </div>
-          </div>
-
-          <div className="p-8">
-            <span className="font-mono text-xs text-gray-500 uppercase block mb-4">08 :: Last Entry</span>
-            <div className="flex items-center gap-4">
-              <div className="font-serif text-4xl italic">
-                {stats?.lastWorkoutDate || 'N/A'}
-              </div>
-            </div>
-          </div>
-        </section>
-
+    <div className="site-shell" onClick={handleLink}>
+      {route.page === 'dashboard' && <Header />}
+      <main id="page-content" tabIndex={-1} className={`site-width ${route.page === 'dashboard' ? 'dashboard' : 'activity-page'}`}>
+        {route.page === 'dashboard' && <Dashboard onDay={date => navigate(dayHref(date))} />}
+        {route.page === 'day' && <DayRoute date={route.date} />}
+        {route.page === 'activity' && <ActivityPage key={route.id} id={route.id} />}
       </main>
-
-      <footer className="max-w-7xl mx-auto py-8 text-center font-mono text-[10px] text-gray-400 uppercase tracking-widest">
-        Designed in 2025 :: Concept2 Backup Project
+      <footer className="site-width site-footer">
+        <span>Concept2 Logbook</span>
+        <a href="https://github.com/Aeliu/concept2-backup" target="_blank" rel="noreferrer">GitHub source ↗︎</a>
       </footer>
-
-      {needRefresh && (
-        <PWAToast
-          message="New version available"
-          actionLabel="Update"
-          onAction={() => updateServiceWorker(true)}
-        />
-      )}
-      {offlineReady && !needRefresh && (
-        <PWAToast
-          message="App ready to work offline"
-          onClose={() => {}}
-        />
-      )}
+      {needRefresh && <PWAToast message="New version available" actionLabel="Update" onAction={() => updateServiceWorker(true)} />}
+      {offlineReady && !needRefresh && <PWAToast message="App ready to work offline" onClose={() => {}} />}
     </div>
   );
-};
+}
 
 export default App;

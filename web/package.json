@@ -4,14 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "python3 ../scripts/export_web_activities.py && vite",
+    "build": "python3 ../scripts/export_web_activities.py && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@fontsource/playfair-display": "^5.2.8",
     "@fontsource/space-mono": "^5.2.9",
-    "d3": "^7.9.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.5.0"
@@ -22,6 +21,8 @@
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^22.14.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.0.0",
     "@vitest/ui": "^4.0.14",
     "jsdom": "^27.2.0",

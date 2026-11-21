@@ -1,125 +1,85 @@
-import React, { useEffect, useRef } from 'react';
-import * as d3 from 'd3';
-import { DailyDistances } from '../types';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import type { DailyDistances } from '../types';
+import { addDays, dateLabel, daysBetween, startOfWeek } from '../utils/calendar';
+import { distanceMeters } from '../utils/format';
 
-interface HeatmapProps {
-  data: DailyDistances;
+const levels = ['0', '< 2', '2–<5', '5–<10', '10+'];
+
+function level(meters: number) {
+  if (meters <= 0) return 0;
+  if (meters < 2000) return 1;
+  if (meters < 5000) return 2;
+  if (meters < 10000) return 3;
+  return 4;
 }
-// theme.ts 或放在 Heatmap.tsx 顶部
 
-export const HEATMAP_THEME = {
-  // 单独定义的空值颜色
-  EMPTY: "#e5e5e5", 
-  
-  // 直接定义为数组，D3可以直接吃
-  // 对应: [ <2000, 2k-5k, 5k-10k, >10k ]
-  COLORS: [
-    "#E8CDCD", // Level 1
-    "#C98084", // Level 2
-    "#9E383D", // Level 3
-    "#5E0B0F"  // Level 4 (Record)
-  ]
-};
-
-export const Heatmap: React.FC<HeatmapProps> = ({ data }) => {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
+export function Heatmap({ data, today, dayHref }: {
+  data: DailyDistances;
+  today: string;
+  dayHref?: (date: string) => string;
+}) {
+  const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 699px)').matches);
+  const [expanded, setExpanded] = useState(false);
+  const scroll = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!svgRef.current || !data || !containerRef.current) return;
+    const query = window.matchMedia('(max-width: 699px)');
+    const resize = () => setCompact(query.matches);
+    query.addEventListener('change', resize);
+    return () => query.removeEventListener('change', resize);
+  }, []);
+  useEffect(() => {
+    if (compact && expanded && scroll.current) scroll.current.scrollLeft = scroll.current.scrollWidth;
+  }, [compact, expanded]);
 
-    // Clear previous render
-    d3.select(svgRef.current).selectAll("*").remove();
-
-    const cellSize = 11; // Slightly smaller for tighter grid
-    const cellMargin = 3;
-    const yearHeight = cellSize * 7 + (cellMargin * 7); 
-    
-    // Determine date range (Last 365 days)
-    const today = new Date();
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(today.getFullYear() - 1);
-    
-    const width = 900; 
-    const height = yearHeight + 40;
-
-    const svg = d3.select(svgRef.current)
-      .attr("width", width)
-      .attr("height", height)
-      .attr("viewBox", `0 0 ${width} ${height}`);
-
-    // Grayscale Color Scale
-    // 0 -> Light Gray, High -> Black
-    const colorScale = d3.scaleThreshold<number, string>()
-      .domain([1, 2000, 5000, 10000]) 
-      .range(HEATMAP_THEME.COLORS);
-
-    const timeWeek = d3.timeSunday;
-    const dates = d3.timeDays(oneYearAgo, today);
-
-    const g = svg.append("g")
-        .attr("transform", `translate(30, 20)`);
-
-    // Draw cells
-    g.selectAll(".day")
-      .data(dates)
-      .enter().append("rect")
-      .attr("class", "day")
-      .attr("width", cellSize)
-      .attr("height", cellSize)
-      .attr("x", (d) => timeWeek.count(oneYearAgo, d) * (cellSize + cellMargin))
-      .attr("y", (d) => d.getDay() * (cellSize + cellMargin))
-      .attr("rx", 0) 
-      .attr("ry", 0)
-      .attr("fill", (d) => {
-        const iso = d3.timeFormat("%Y-%m-%d")(d);
-        return data[iso] ? colorScale(data[iso]) : "transparent";
-      })
-      .attr("stroke", (d) => {
-         const iso = d3.timeFormat("%Y-%m-%d")(d);
-         // If no data, outline it lightly to show the grid
-         return data[iso] ? "none" : HEATMAP_THEME.EMPTY; 
-      })
-      .attr("stroke-width", 1)
-      .append("title")
-      .text((d) => {
-        const iso = d3.timeFormat("%Y-%m-%d")(d);
-        const val = data[iso];
-        return `${iso}: ${val ? val.toLocaleString() : 0} m`;
-      });
-
-    // Month Labels
-    const months = d3.timeMonths(oneYearAgo, today);
-    g.selectAll(".month")
-      .data(months)
-      .enter().append("text")
-      .attr("class", "month")
-      .attr("x", (d) => timeWeek.count(oneYearAgo, d) * (cellSize + cellMargin))
-      .attr("y", -10)
-      .text((d) => d3.timeFormat("%b")(d))
-      .attr("fill", "#000")
-      .attr("font-size", "10px")
-      .style("font-family", "'Space Mono', monospace")
-      .style("text-transform", "uppercase");
-
-    // Day Labels
-    const days = ["S", "M", "T", "W", "T", "F", "S"];
-    g.selectAll(".day-label")
-      .data([1, 3, 5]) 
-      .enter().append("text")
-      .attr("x", -10)
-      .attr("y", (d) => d * (cellSize + cellMargin) + 9)
-      .text((d) => days[d])
-      .attr("fill", "#9ca3af")
-      .attr("font-size", "8px")
-      .attr("text-anchor", "end")
-      .style("font-family", "'Space Mono', monospace");
-
-  }, [data]);
+  const showYear = !compact || expanded;
+  const first = showYear ? addDays(today, -364) : addDays(startOfWeek(today), -77);
+  const start = startOfWeek(first);
+  const weeks = Math.ceil((daysBetween(start, today) + 1) / 7);
+  const dates = Array.from({ length: weeks * 7 }, (_, index) => addDays(start, index));
+  const monthLabels: { month: string; column: number }[] = [];
+  let lastMonth = '';
+  dates.forEach((date, index) => {
+    if (date < first || date > today || date.slice(0, 7) === lastMonth) return;
+    const column = Math.floor(index / 7) + 1;
+    lastMonth = date.slice(0, 7);
+    const previous = monthLabels.at(-1);
+    const label = { month: dateLabel(date, { month: 'short' }), column };
+    if (!previous || column - previous.column >= 2) monthLabels.push(label);
+    else if (monthLabels.length === 1) monthLabels[0] = label;
+  });
 
   return (
-    <div className="w-full overflow-x-auto pb-4 custom-scrollbar" ref={containerRef}>
-      <svg ref={svgRef} className="min-w-[800px] mx-auto"></svg>
-    </div>
+    <section className="panel heatmap-panel" aria-labelledby="heatmap-heading">
+      <div className="panel-header">
+        <div>
+          <h2 id="heatmap-heading">Training calendar</h2>
+          <p className="panel-caption">{showYear ? 'Last 365 days' : 'Recent 12 weeks'} · daily distance</p>
+        </div>
+        {compact && <button className="text-button" type="button" aria-expanded={showYear} onClick={() => setExpanded(value => !value)}>
+          {showYear ? 'Show 12 weeks' : 'Show full year'}
+        </button>}
+      </div>
+      <div ref={scroll} className="calendar-scroll">
+        <div className={`calendar-layout ${compact && showYear ? 'calendar-wide' : ''}`} style={{ '--weeks': weeks } as CSSProperties}>
+          <div className="calendar-months" aria-hidden="true">
+            {monthLabels.map(({ month, column }) => <span key={column} style={{ gridColumn: column }}>{month}</span>)}
+          </div>
+          <div className="calendar-weekdays" aria-hidden="true"><span>Mon</span><span>Wed</span><span>Fri</span></div>
+          <div className="calendar-cells">
+            {dates.map(date => {
+              if (date < first || date > today) return <span key={date} aria-hidden="true" />;
+              const meters = data[date] ?? 0;
+              const title = `${dateLabel(date, { month: 'long', day: 'numeric', year: 'numeric' })} · ${distanceMeters(meters)} m`;
+              return meters > 0 && dayHref
+                ? <a key={date} className={`calendar-cell level-${level(meters)}`} href={dayHref(date)} data-route aria-label={title} title={title} />
+                : <span key={date} className={`calendar-cell level-${level(meters)}`} title={title} />;
+            })}
+          </div>
+        </div>
+      </div>
+      <ul className="calendar-legend" aria-label="Daily distance in kilometers">
+        {levels.map((text, index) => <li key={text}><span className={`level-${index}`} />{text}{index === 4 ? ' km' : ''}</li>)}
+      </ul>
+    </section>
   );
-};
+}

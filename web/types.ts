@@ -15,3 +15,33 @@ export interface DerivedStats {
   thisYearDistance: number;
   lastWorkoutDate: string | null;
 }
+
+export interface ActivitySummary {
+  id: string;
+  date: string;
+  startedAt: string | null;
+  distance: number;
+  duration: number | null;
+  restSeconds: number;
+  workDistance: number;
+}
+
+export type ActivityPoint = [
+  elapsed: number,
+  pace: number | null,
+  cadence: number | null,
+  watts: number | null,
+  heartRate: number | null,
+];
+
+export interface ActivitySegment {
+  start: number;
+  seconds: number | null;
+  distance: number;
+  resting: boolean;
+  points: ActivityPoint[];
+}
+
+export interface ActivityDetail extends ActivitySummary {
+  segments: ActivitySegment[];
+}

@@ -10,7 +10,7 @@ interface PWAState {
 export function usePWA(): PWAState {
   const [needRefresh, setNeedRefresh] = useState(false);
   const [offlineReady, setOfflineReady] = useState(false);
-  const [updateSW, setUpdateSW] = useState<() => Promise<void>>(() => async () => {});
+  const [updateSW, setUpdateSW] = useState<PWAState['updateServiceWorker']>(() => async () => {});
 
   useEffect(() => {
     const updateServiceWorker = registerSW({
