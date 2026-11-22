@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
         manifest: {
           name: 'Rowing Stats Visualizer',
           short_name: 'RowingStats',
-          description: 'A modern dashboard to visualize Concept2 rowing data',
+          description: 'Concept2 training volume, activity calendar, and workout details',
           theme_color: '#f3f3f1',
           background_color: '#f3f3f1',
           display: 'standalone',
@@ -44,15 +44,15 @@ export default defineConfig(({ mode }) => {
           ],
           screenshots: [
             {
-              src: 'screenshot-desktop.png', // 电脑版截图，建议 1280x720 或类似比例
-              sizes: '1280x1032',
+              src: 'screenshot-desktop.png',
+              sizes: '1280x1180',
               type: 'image/png',
               form_factor: 'wide', // 标记为宽屏设备用
               label: 'Desktop Dashboard'
             },
             {
-              src: 'screenshot-mobile.png', // 手机版截图，建议 750x1334 或类似比例
-              sizes: '750x1471',
+              src: 'screenshot-mobile.png',
+              sizes: '780x1688',
               type: 'image/png',
               label: 'Mobile View'
             }
@@ -86,6 +86,22 @@ export default defineConfig(({ mode }) => {
                 cacheableResponse: {
                   statuses: [0, 200]
                 }
+              }
+            },
+            {
+              urlPattern: /\/activities\/months\/\d{4}-\d{2}\.json$/i,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'activity-month-cache',
+                expiration: { maxEntries: 24, maxAgeSeconds: 60 * 60 * 24 * 7 }
+              }
+            },
+            {
+              urlPattern: /\/activities\/details\/[1-9]\d*\.json$/i,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'activity-detail-cache',
+                expiration: { maxEntries: 24, maxAgeSeconds: 60 * 60 * 24 * 7 }
               }
             },
             {

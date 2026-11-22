@@ -105,6 +105,8 @@ pnpm build
 
 前端读取 `./stats.json`。本地调试时需要把仓库根目录的 `data/stats.json` 放到 `web/public/stats.json`。
 
+`pnpm dev` 和 `pnpm build` 需要 `uv`，会用 Python 3.13 从 `data/` 下的 TCX 生成月度活动索引和单次详情。GitHub Pages 构建会一并发布这些数据。
+
 ### Worker（`worker/`）
 
 ```bash

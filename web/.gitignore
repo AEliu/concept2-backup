@@ -24,6 +24,8 @@ dist-ssr
 *.sw?
 
 public/stats.json
+public/activities/
+.activities-*/
 public/profile-heatmap.png
 
 .claude/*.txt

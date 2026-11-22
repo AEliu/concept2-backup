@@ -7,44 +7,15 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Rowing Stats" />
-    <meta name="description" content="A modern dashboard to visualize Concept2 rowing data, featuring GitHub-style heatmaps, streak calculation, and aggregate statistics." />
+    <meta name="description" content="Explore Concept2 training volume, your activity calendar, and individual workout performance." />
 
     <!-- Icons -->
     <link rel="icon" href="/concept2-backup/favicon.ico" />
     <link rel="apple-touch-icon" href="/concept2-backup/apple-touch-icon.png" />
     <link rel="manifest" href="/concept2-backup/manifest.webmanifest" />
     
-    <link rel="preload" href="/concept2-backup/stats.json" as="fetch" crossorigin>
-
-    <title>Rowing Stats</title>
-    <style>
-      body {
-        background-color: #f3f3f1; /* Off-white / Stone-100ish */
-        color: #1a1a1a;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-      }
-      .font-serif {
-        font-family: 'Playfair Display', serif;
-      }
-      .font-mono {
-        font-family: 'Space Mono', monospace;
-      }
-      /* Custom Dotted Border */
-      .border-dotted-custom {
-        background-image: linear-gradient(to right, #000 33%, rgba(255,255,255,0) 0%);
-        background-position: bottom;
-        background-size: 6px 1px;
-        background-repeat: repeat-x;
-      }
-      .border-dotted-custom-vertical {
-        background-image: linear-gradient(to bottom, #000 33%, rgba(255,255,255,0) 0%);
-        background-position: right;
-        background-size: 1px 6px;
-        background-repeat: repeat-y;
-      }
-    </style>
-</head>
+    <title>Rowing Dynamics</title>
+  </head>
   <body>
     <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
