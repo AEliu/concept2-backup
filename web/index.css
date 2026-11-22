@@ -54,6 +54,16 @@ main:focus { outline: none; }
 .metric dd small { font: 0.72rem var(--font-mono); white-space: nowrap; }
 .metric-accent { color: #fff; background: #542329; }
 .metric-accent dt { color: #f4e1e1; }
+.metric-value-accent { color: var(--wine); }
+.metric-linked { position: relative; }
+.metric-link { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.metric-link::after { content: ""; position: absolute; inset: 0; }
+.metric-link-arrow { color: var(--wine); font: 0.9rem var(--font-mono); }
+.metric-link:focus-visible { outline: none; }
+.metric-link:focus-visible::after { outline: 2px solid var(--wine); outline-offset: -3px; }
+@media (hover: hover) and (pointer: fine) {
+  .metric-linked:hover { background: #ede9e1; }
+}
 
 .dashboard-panels { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; }
 .panel { min-width: 0; padding: 20px; border: 1px solid var(--line); background: var(--surface); }
