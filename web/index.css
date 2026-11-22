@@ -72,6 +72,7 @@ main:focus { outline: none; }
 .panel-caption { margin: 5px 0 0; color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
 .chart-note { margin: 6px 0 0; color: var(--muted); font-size: 0.75rem; }
 .volume-chart { height: 196px; }
+.trace-panel > .panel-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
 .trace-chart { height: 280px; }
 .clickable-bars .recharts-rectangle { cursor: pointer; }
 .recharts-default-tooltip { font-size: 0.8rem; }
@@ -192,6 +193,11 @@ main:focus { outline: none; }
   color: var(--muted);
 }
 .site-footer a { text-decoration: underline; text-underline-offset: 3px; }
+
+@media (max-width: 559px) {
+  .trace-panel > .panel-header { grid-template-columns: minmax(0, 1fr); justify-items: start; }
+  .trace-metric-control { max-width: 100%; }
+}
 
 @media (max-width: 900px) {
   .site-width { width: calc(100% - 40px); }

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ActivityDetail } from '../types';
 import { ActivityPage } from './ActivityPages';
@@ -109,7 +109,11 @@ describe('ActivityPage', () => {
 
     expect(screen.getByRole('columnheader', { name: 'Pace /1000 m' })).toBeInTheDocument();
     expect(screen.getByRole('row', { name: /1\. Work 100 m 0:25\.1 4:11\.0/ })).toBeInTheDocument();
-    expect(screen.getByText('Elapsed time · per-stroke pace')).toBeInTheDocument();
+    const trace = within(screen.getByRole('region', { name: 'Training trace' }));
+    const officialNote = 'Elapsed time · per-stroke pace · Concept2 Logbook';
+    expect(trace.getByText('Pace per 1000 m')).toHaveClass('panel-caption');
+    expect(trace.getByText(officialNote)).toHaveClass('chart-note');
+    expect(trace.getByText('Shaded bands mark recovery.')).toHaveClass('chart-note');
     expect(chart.data).toEqual([
       { time: 5, value: 200 },
       { time: 25, value: null },
@@ -118,6 +122,8 @@ describe('ActivityPage', () => {
     ]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Power' }));
+    expect(trace.getByText('Power in watts')).toHaveClass('panel-caption');
+    expect(trace.queryByText(officialNote)).not.toBeInTheDocument();
     expect(chart.data).toEqual([
       { time: 10, value: 150 },
       { time: 40, value: null },
