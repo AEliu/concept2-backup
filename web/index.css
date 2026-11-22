@@ -79,7 +79,7 @@ main:focus { outline: none; }
 .segmented-control, .trace-metric-control { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--soft-line); background: var(--paper); }
 .segmented-control button { padding: 6px 9px; min-height: 32px; font-size: 0.75rem; color: var(--muted); }
 .segmented-control button[aria-pressed="true"] { color: white; background: var(--ink); }
-.segmented-control button:hover:not([aria-pressed="true"]), .record-list a:hover { background: #ede9e1; }
+.segmented-control button:hover:not([aria-pressed="true"]), .day-records a:hover { background: #ede9e1; }
 .trace-metric-control {
   --trace-hover-shadow: 0 1px 4px rgb(36 35 31 / 24%);
   padding: 3px;
@@ -122,12 +122,35 @@ main:focus { outline: none; }
 
 .record-list { margin: 0; padding: 0; list-style: none; }
 .record-list li { border-top: 1px solid var(--soft-line); }
-.record-list a, .demo-record { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 42px; padding: 8px 2px; font-size: 0.875rem; }
-.record-list a > span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.record-list a span span { color: var(--wine); padding-inline-start: 4px; }
-.record-list small { display: block; margin-top: 2px; color: var(--muted); }
+.recent-record-row, .day-records a { padding: 8px 2px; font-size: 0.875rem; }
+.recent-record-row {
+  display: grid;
+  grid-template-columns: 1fr max-content 0.9rem;
+  align-items: center;
+  column-gap: 0.6rem;
+  min-height: 44px;
+}
+.recent-record-date {
+  display: inline-grid;
+  grid-template-columns: 2.25rem 1.85rem 2ch;
+  align-items: baseline;
+  column-gap: 0.2rem;
+  white-space: nowrap;
+}
+.recent-record-weekday, .recent-record-unit { color: var(--muted); font-size: 0.75rem; }
+.recent-record-day { text-align: end; font-variant-numeric: tabular-nums; }
+.recent-record-distance { display: inline-flex; align-items: baseline; gap: 0.35rem; white-space: nowrap; }
+.recent-record-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.recent-record-arrow { justify-self: end; color: var(--wine); }
+a.recent-record-row:active { background: #ede9e1; }
+@media (hover: hover) and (pointer: fine) {
+  a.recent-record-row:hover { background: #ede9e1; }
+}
 .day-records { margin-top: 16px; }
-.day-records a { min-height: 54px; }
+.day-records a { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 54px; }
+.day-records a > span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.day-records a > span:last-child > span { color: var(--wine); padding-inline-start: 4px; }
+.day-records small { display: block; margin-top: 2px; color: var(--muted); }
 
 .heatmap-panel { grid-column: 1 / -1; }
 .calendar-scroll { overflow-x: auto; padding: 4px 4px 6px; }
