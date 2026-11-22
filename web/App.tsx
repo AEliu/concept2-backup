@@ -3,13 +3,14 @@ import { ActivityDay, ActivityPage, dayHref } from './components/ActivityPages';
 import { Header } from './components/Header';
 import { Heatmap } from './components/Heatmap';
 import { PWAToast } from './components/PWAToast';
+import { RecentRecords } from './components/RecentRecords';
 import { StatCard } from './components/StatCard';
 import { TrainingVolume } from './components/TrainingVolume';
 import { useJson } from './hooks/useJson';
 import { usePWA } from './hooks/usePWA';
 import type { DailyDistances, StatsData } from './types';
 import { addDays, dailyVolume, dateLabel, todayKey } from './utils/calendar';
-import { distanceKm, distanceMeters } from './utils/format';
+import { distanceKm } from './utils/format';
 import { calculateDerivedStats } from './utils/statsCalculator';
 
 type Route = { page: 'dashboard' } | { page: 'day'; date: string } | { page: 'activity'; id: string };
@@ -62,27 +63,7 @@ function Dashboard({ onDay }: { onDay: (date: string) => void }) {
       </dl>
       <div className="dashboard-panels">
         <TrainingVolume data={data} today={today} onDay={demo ? undefined : onDay} />
-        <section className="panel recent-panel" aria-labelledby="recent-heading">
-          <div className="panel-header">
-            <div>
-              <h2 id="recent-heading">Recent records</h2>
-              <p className="panel-caption">Distance by training day</p>
-            </div>
-          </div>
-          {lastRecords.length ? (
-            <ul className="record-list">
-              {lastRecords.map(([date, meters]) => (
-                <li key={date}>
-                  {demo ? <div className="demo-record"><time dateTime={date}>{dateLabel(date)}</time><span>{distanceMeters(meters)} m</span></div>
-                    : <a href={dayHref(date)} data-route aria-label={`${dateLabel(date, { month: 'long', day: 'numeric', year: 'numeric' })}, ${distanceMeters(meters)} meters`}>
-                    <time dateTime={date}>{dateLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}</time>
-                    <span>{distanceMeters(meters)} m <span aria-hidden="true">→</span></span>
-                  </a>}
-                </li>
-              ))}
-            </ul>
-          ) : <p className="page-message">No training records yet.</p>}
-        </section>
+        <RecentRecords records={lastRecords} demo={demo} />
         <Heatmap data={data} today={today} dayHref={demo ? undefined : dayHref} />
       </div>
       <section className="long-term" aria-labelledby="history-heading">
