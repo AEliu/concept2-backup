@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import math
+import os
 import shutil
 import tempfile
 import xml.etree.ElementTree as ET
@@ -12,6 +13,7 @@ from collections import deque
 from pathlib import Path
 
 from activity_stats import activity_date, activity_id, parse_tcx_activities
+from web_official_data import load_official_cache, matches_tcx
 
 PACE_WINDOW_SECONDS = 10
 
@@ -71,8 +73,9 @@ def lap_points(lap: ET.Element, start: float, end: float, resting: bool) -> list
     return points
 
 
-def activity_payload(path: Path, result_id: int) -> tuple[dict, dict]:
-    activities = parse_tcx_activities(path.read_bytes())
+def activity_payload(path: Path, result_id: int, official_entry=None) -> tuple[dict, dict]:
+    content = path.read_bytes()
+    activities = parse_tcx_activities(content)
     started_at = timestamp(activities[0][0].findtext("{*}Id"))
     date = activity_date(path.name) or (started_at.date().isoformat() if started_at else None)
     if date is None:
@@ -108,15 +111,21 @@ def activity_payload(path: Path, result_id: int) -> tuple[dict, dict]:
         "duration": round(elapsed, 1) if timing_complete else None, "restSeconds": round(rest_seconds, 1),
         "workDistance": round(work_distance, 1),
     }
-    return summary, {**summary, "segments": segments}
+    detail = {**summary, "segments": segments}
+    if matches_tcx(official_entry, path.name, content):
+        official = official_entry.get("official")
+        if isinstance(official, dict) and official:
+            detail["official"] = official
+    return summary, detail
 
 
 def write_json(path: Path, data: object) -> None:
     path.write_text(json.dumps(data, separators=(",", ":"), allow_nan=False), encoding="utf-8")
 
 
-def export_activities(data: Path, output: Path) -> None:
+def export_activities(data: Path, output: Path, official_cache: Path | None = None) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
+    official_entries = load_official_cache(official_cache)
     with tempfile.TemporaryDirectory(prefix=".activities-", dir=output.parent.parent) as temp:
         staging = Path(temp) / "activities"
         details = staging / "details"
@@ -131,7 +140,10 @@ def export_activities(data: Path, output: Path) -> None:
             if result_id in summaries:
                 raise ValueError(f"Duplicate result ID: {result_id}")
             try:
-                summary, detail = activity_payload(path, result_id)
+                entry = official_entries.get(str(result_id))
+                if entry is not None and (data / "deletions" / f"{result_id}.json").exists():
+                    entry = None
+                summary, detail = activity_payload(path, result_id, entry)
             except ValueError as error:
                 raise ValueError(f"{path.name}: {error}") from error
             summaries[result_id] = summary
@@ -153,4 +165,5 @@ def export_activities(data: Path, output: Path) -> None:
 
 if __name__ == "__main__":
     repo = Path(__file__).resolve().parent.parent
-    export_activities(repo / "data", repo / "web" / "public" / "activities")
+    cache = os.environ.get("C2_OFFICIAL_CACHE")
+    export_activities(repo / "data", repo / "web" / "public" / "activities", Path(cache) if cache else None)

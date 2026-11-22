@@ -95,6 +95,22 @@ class SimpleConcept2API:
 
         return response.json().get("data", {})
 
+    def get_result_with_strokes(self, result_id: int) -> dict | None:
+        """Fetch the result and embedded strokes together; a missing result is optional."""
+        headers = {**self.auth.get_headers(), "Accept": "application/vnd.c2logbook.v1+json"}
+        response = requests.get(
+            f"{RESULTS_URL}/{result_id}", headers=headers, params={"include": "strokes"},
+            timeout=AUTH_TIMEOUT_SECONDS,
+        )
+        if response.status_code in (403, 404):
+            return None
+        response.raise_for_status()
+        payload = response.json()
+        result = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(result, dict) or type(result.get("id")) is not int or result["id"] != result_id:
+            raise ValueError("Unexpected Concept2 result response")
+        return result
+
     def get_all_results(
         self, per_page: int = 100, strict_pagination: bool = False
     ) -> list:

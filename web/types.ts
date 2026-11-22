@@ -42,6 +42,29 @@ export interface ActivitySegment {
   points: ActivityPoint[];
 }
 
+export interface OfficialSegment {
+  seconds: number;
+  distance: number | null;
+  resting: boolean;
+}
+
+export interface OfficialPaceSegment {
+  start: number;
+  seconds: number;
+  resting: boolean;
+  points: [elapsed: number, pace: number][];
+}
+
+export interface OfficialActivityData {
+  segments?: OfficialSegment[];
+  paceMeters?: 500 | 1000;
+  pace?: {
+    duration: number;
+    segments: OfficialPaceSegment[];
+  };
+}
+
 export interface ActivityDetail extends ActivitySummary {
   segments: ActivitySegment[];
+  official?: OfficialActivityData;
 }

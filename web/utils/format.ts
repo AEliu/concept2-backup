@@ -9,10 +9,12 @@ export function distanceMeters(meters: number) {
   return number.format(meters);
 }
 
-export function formatDuration(seconds: number) {
-  const total = Math.round(seconds);
-  const minutes = Math.floor(total / 60);
-  const remainder = String(total % 60).padStart(2, '0');
+export function formatDuration(seconds: number, showTenths = false) {
+  const totalTenths = showTenths ? Math.round(seconds * 10) : Math.round(seconds) * 10;
+  const minutes = Math.floor(totalTenths / 600);
+  const remainder = showTenths
+    ? paceSeconds.format((totalTenths % 600) / 10)
+    : String((totalTenths % 600) / 10).padStart(2, '0');
   return minutes >= 60
     ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}:${remainder}`
     : `${minutes}:${remainder}`;
@@ -24,6 +26,6 @@ export function formatPace(seconds: number | null) {
   return `${Math.floor(tenths / 600)}:${paceSeconds.format((tenths % 600) / 10)}`;
 }
 
-export function calculatePace(meters: number, seconds: number) {
-  return meters > 0 && seconds > 0 ? (seconds * 500) / meters : null;
+export function calculatePace(meters: number, seconds: number, paceMeters = 500) {
+  return meters > 0 && seconds > 0 ? (seconds * paceMeters) / meters : null;
 }

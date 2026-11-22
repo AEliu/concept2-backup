@@ -70,21 +70,29 @@ const metrics = [
 type MetricIndex = typeof metrics[number]['index'];
 
 function ActivityChart({ activity }: { activity: ActivityDetail }) {
-  const available = metrics.filter(metric => activity.segments.some(segment => segment.points.some(point => point[metric.index] !== null)));
+  const officialPace = activity.official?.paceMeters && activity.official.pace?.segments.some(segment => segment.points.length > 0)
+    ? activity.official.pace : undefined;
+  const available = metrics.filter(metric => (metric.index === 1 && officialPace)
+    || activity.segments.some(segment => segment.points.some(point => point[metric.index] !== null)));
   const [requestedMetric, setMetric] = useState<MetricIndex>(1);
   const metric = available.find(option => option.index === requestedMetric) ?? available[0];
-  if (!metric || activity.duration === null) return (
+  const usesOfficialPace = metric?.index === 1 && officialPace !== undefined;
+  const duration = usesOfficialPace ? officialPace.duration : activity.duration;
+  if (!metric || duration === null) return (
     <section className="panel">
       <h2>Training trace</h2>
       <p className="page-message">This activity has no recorded chart samples.</p>
     </section>
   );
-  const duration = activity.duration;
-  const points = activity.segments.flatMap((segment, index) => {
-    const samples = segment.points.map(point => ({ time: point[0], value: point[metric.index] }));
+  const chartSegments = usesOfficialPace ? officialPace.segments : activity.segments;
+  const valueIndex = usesOfficialPace ? 1 : metric.index;
+  const points = chartSegments.flatMap((segment, index) => {
+    const samples = segment.points.map(point => ({ time: point[0], value: point[valueIndex] ?? null }));
     if (index > 0) samples.unshift({ time: segment.start, value: null });
     return samples;
   });
+  const paceMeters = usesOfficialPace ? activity.official?.paceMeters : 500;
+  const unit = metric.index === 1 ? `/${paceMeters} m` : metric.unit;
   const formatValue = (value: number) => metric.index === 1 ? formatPace(value) : String(Math.round(value));
 
   return (
@@ -92,7 +100,9 @@ function ActivityChart({ activity }: { activity: ActivityDetail }) {
       <div className="panel-header">
         <div>
           <h2 id="trace-heading">Training trace</h2>
-          <p className="panel-caption">{metric.axis}{activity.restSeconds > 0 ? ' · shaded bands mark recovery' : ''}</p>
+          <p className="panel-caption">{metric.index === 1 ? `Pace per ${paceMeters} m` : metric.axis}
+            {usesOfficialPace ? ' · Concept2 Logbook' : ''}
+            {chartSegments.some(segment => segment.resting) ? ' · shaded bands mark recovery' : ''}</p>
         </div>
         {available.length > 1 && <div className="segmented-control" role="group" aria-label="Training trace metric">
           {available.map(option => <button key={option.index} type="button" aria-pressed={metric.index === option.index}
@@ -103,13 +113,13 @@ function ActivityChart({ activity }: { activity: ActivityDetail }) {
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={points} margin={{ top: 10, right: 16, left: 0, bottom: 4 }}>
             <CartesianGrid vertical={false} stroke="#e0dfda" strokeDasharray="3 4" />
-            <XAxis type="number" dataKey="time" domain={[0, duration]} tickFormatter={formatDuration} tickCount={5}
+            <XAxis type="number" dataKey="time" domain={[0, duration]} tickFormatter={value => formatDuration(value)} tickCount={5}
               tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#5c5953' }} />
             <YAxis width={46} domain={['auto', 'auto']} tickCount={5} reversed={metric.index === 1}
               tickFormatter={formatValue} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#5c5953' }} />
-            <Tooltip labelFormatter={value => formatDuration(Number(value))}
-              formatter={value => [`${formatValue(Number(value))} ${metric.unit}`, metric.label]} />
-            {activity.segments.filter(segment => segment.resting).map((segment, index) => (
+            <Tooltip labelFormatter={value => formatDuration(Number(value), usesOfficialPace)}
+              formatter={value => [`${formatValue(Number(value))} ${unit}`, metric.label]} />
+            {chartSegments.filter(segment => segment.resting).map((segment, index) => (
               <ReferenceArea key={index} x1={segment.start} x2={Math.min(segment.start + (segment.seconds ?? 0), duration)}
                 fill="#b9b3a8" fillOpacity={0.24} />
             ))}
@@ -117,7 +127,7 @@ function ActivityChart({ activity }: { activity: ActivityDetail }) {
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <p className="chart-note">Elapsed time{metric.index === 1 ? ' · pace averaged over about 10 s' : ''}</p>
+      <p className="chart-note">Elapsed time{usesOfficialPace ? ' · per-stroke pace' : metric.index === 1 ? ' · pace averaged over about 10 s' : ''}</p>
     </section>
   );
 }
@@ -139,6 +149,10 @@ export function ActivityPage({ id }: { id: string }) {
   const workTime = activity.duration === null ? null : activity.duration - activity.restSeconds;
   const hasRecovery = workTime !== null && activity.restSeconds > 0;
   const averagePace = workTime === null ? null : calculatePace(activity.workDistance, workTime);
+  const officialSegments = activity.official?.segments;
+  const useOfficialSegments = Boolean(officialSegments?.length);
+  const tableSegments = officialSegments?.length ? officialSegments : activity.segments;
+  const paceMeters = useOfficialSegments ? activity.official?.paceMeters : 500;
 
   return (
     <>
@@ -154,16 +168,19 @@ export function ActivityPage({ id }: { id: string }) {
         {hasRecovery && <StatCard label="Recovery time" value={formatDuration(activity.restSeconds)} />}
       </dl>
       <ActivityChart activity={activity} />
-      {activity.segments.length > 1 && <section className="panel">
+      {(useOfficialSegments || tableSegments.length > 1) && <section className="panel">
         <h2>Workout segments</h2>
+        {useOfficialSegments && <p className="panel-caption">Concept2 Logbook</p>}
         <table className="segment-table">
-          <thead><tr><th scope="col">Segment</th><th scope="col">Distance</th><th scope="col">Time</th><th scope="col">Pace /500 m</th></tr></thead>
-          <tbody>{activity.segments.map((segment, index) => (
+          <thead><tr><th scope="col">Segment</th><th scope="col">Distance</th><th scope="col">Time</th>
+            {paceMeters && <th scope="col">Pace /{paceMeters} m</th>}</tr></thead>
+          <tbody>{tableSegments.map((segment, index) => (
             <tr key={index} className={segment.resting ? 'recovery-row' : undefined}>
               <th scope="row">{index + 1}. {segment.resting ? 'Recovery' : 'Work'}</th>
-              <td>{distanceMeters(segment.distance)} m</td>
-              <td>{segment.seconds === null ? '—' : formatDuration(segment.seconds)}</td>
-              <td>{segment.resting || segment.seconds === null ? '—' : formatPace(calculatePace(segment.distance, segment.seconds))}</td>
+              <td>{segment.distance === null ? '—' : `${distanceMeters(segment.distance)} m`}</td>
+              <td>{segment.seconds === null ? '—' : formatDuration(segment.seconds, useOfficialSegments)}</td>
+              {paceMeters && <td>{segment.resting || segment.seconds === null || segment.distance === null
+                ? '—' : formatPace(calculatePace(segment.distance, segment.seconds, paceMeters))}</td>}
             </tr>
           ))}</tbody>
         </table>
