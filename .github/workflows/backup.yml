@@ -258,6 +258,31 @@ jobs:
       # --- 阶段四：前端构建 (Web Build) ---
       # 无论是否有数据更新，我们都重新构建并部署，以防代码本身有更新
       # 如果只想在数据变更时部署，可以在下面步骤加 if
+      - name: Restore Concept2 detail cache
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/concept2-official-details.json
+          key: concept2-official-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: concept2-official-v1-
+
+      - name: Refresh official splits and stroke pace
+        id: sync_official
+        continue-on-error: true
+        env:
+          C2_ACCESS_TOKEN: ${{ secrets.C2_ACCESS_TOKEN }}
+          C2_OFFICIAL_CACHE: ${{ runner.temp }}/concept2-official-details.json
+          C2_OFFICIAL_REFRESH_ID: ${{ (github.event.client_payload.event_type == 'result-updated' && github.event.client_payload.result_id) || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'single' && github.event.inputs.result_id) || '' }}
+        run: uv run --project scripts python scripts/sync_web_official_data.py
+
+      - name: Save Concept2 detail cache
+        if: steps.sync_official.outputs.changed == 'true'
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/concept2-official-details.json
+          key: concept2-official-v1-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
@@ -295,6 +320,8 @@ jobs:
 
       - name: Build Web App
         working-directory: ./web
+        env:
+          C2_OFFICIAL_CACHE: ${{ steps.sync_official.outcome == 'success' && format('{0}/concept2-official-details.json', runner.temp) || '' }}
         run: pnpm build
 
       # --- 阶段五：上传构建产物 ---

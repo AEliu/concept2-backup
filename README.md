@@ -107,6 +107,8 @@ pnpm build
 
 `pnpm dev` 和 `pnpm build` 需要 `uv`，会用 Python 3.13 从 `data/` 下的 TCX 生成月度活动索引和单次详情。GitHub Pages 构建会一并发布这些数据。
 
+备份工作流会用现有的 `C2_ACCESS_TOKEN` 补充官方分段和逐桨配速，每次最多查询 60 条待补活动，优先处理最近的训练并缓存已查询的结果。详情页在缺少官方分段或逐桨配速时分别沿用 TCX。本地构建默认读取 TCX，也可把 `C2_OFFICIAL_CACHE` 指向由 `scripts/sync_web_official_data.py` 生成的缓存文件。
+
 ### Worker（`worker/`）
 
 ```bash
