@@ -4,7 +4,11 @@ import type { ActivityDetail } from '../types';
 import { ActivityPage } from './ActivityPages';
 
 type ChartPoint = { time: number; value: number | null };
-const chart = vi.hoisted(() => ({ data: [] as ChartPoint[] }));
+type TooltipFormatter = (value: number) => [string, string];
+const chart = vi.hoisted(() => ({
+  data: [] as ChartPoint[],
+  formatTooltip: null as TooltipFormatter | null,
+}));
 const resource = vi.hoisted(() => ({ detail: null as ActivityDetail | null }));
 
 vi.mock('../hooks/useJson', () => ({
@@ -23,7 +27,10 @@ vi.mock('recharts', () => {
     },
     ReferenceArea: empty,
     ResponsiveContainer: passThrough,
-    Tooltip: empty,
+    Tooltip: ({ formatter }: { formatter: TooltipFormatter }) => {
+      chart.formatTooltip = formatter;
+      return null;
+    },
     XAxis: empty,
     YAxis: empty,
   };
@@ -45,6 +52,38 @@ const tcx: ActivityDetail = {
 };
 
 describe('ActivityPage', () => {
+  it('selects the first recorded metric and changes the trace and units on click only', () => {
+    resource.detail = {
+      ...tcx,
+      segments: tcx.segments.map(segment => ({
+        ...segment,
+        points: segment.points.map(([time, , cadence, watts, heartRate]) => [time, null, cadence, watts, heartRate]),
+      })),
+    };
+
+    render(<ActivityPage id="123" />);
+
+    const cadence = screen.getByRole('button', { name: 'Cadence' });
+    const power = screen.getByRole('button', { name: 'Power' });
+    expect(screen.queryByRole('button', { name: 'Pace' })).not.toBeInTheDocument();
+    expect(cadence).toHaveAttribute('aria-pressed', 'true');
+    expect(chart.data[0]).toEqual({ time: 10, value: 25 });
+    expect(chart.formatTooltip?.(25)).toEqual(['25 spm', 'Cadence']);
+
+    fireEvent.mouseOver(power);
+    expect(cadence).toHaveAttribute('aria-pressed', 'true');
+    expect(power).toHaveAttribute('aria-pressed', 'false');
+    expect(chart.data[0]).toEqual({ time: 10, value: 25 });
+    expect(chart.formatTooltip?.(25)).toEqual(['25 spm', 'Cadence']);
+
+    fireEvent.click(power);
+    expect(cadence).toHaveAttribute('aria-pressed', 'false');
+    expect(power).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/Power in watts/)).toBeInTheDocument();
+    expect(chart.data[0]).toEqual({ time: 10, value: 150 });
+    expect(chart.formatTooltip?.(150)).toEqual(['150 W', 'Power']);
+  });
+
   it('uses official split rows and per-stroke pace while keeping other metrics on TCX', () => {
     resource.detail = {
       ...tcx,
