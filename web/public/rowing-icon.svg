@@ -1,0 +1,9 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <title>Rowing Dynamics</title>
+  <rect x="1.5" y="1.5" width="61" height="61" rx="14" fill="#8d2d42" stroke="#f5c6b7" stroke-width="3"/>
+  <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <path d="M18 45 39 24" fill="none" stroke="#fff3df" stroke-linecap="round" stroke-width="6"/>
+  <path d="m33.5 21 9.8-9.1a3 3 0 0 1 4.1.1l5 5a3 3 0 0 1 .1 4.1l-9.1 9.8a3.6 3.6 0 0 1-5.2.1l-4.8-4.8a3.6 3.6 0 0 1 .1-5.2Z" fill="#fff3df"/>
+  <path d="M24 51c9 1 17-2 24-8" fill="none" stroke="#fff3df" stroke-linecap="round" stroke-width="5"/>
+</svg>
+</svg>

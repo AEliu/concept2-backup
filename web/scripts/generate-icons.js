@@ -1,108 +1,57 @@
+import { readFile, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const publicFile = name => new URL(`../public/${name}`, import.meta.url);
+const mark = (await readFile(new URL('../logo_icon.svg', import.meta.url), 'utf8')).trim();
+const background = '#8d2d42';
 
-// SVG content for the bar chart icon
-const svgContent = `<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <title>Rowing Stats Visualizer</title>
-  <path d="M0 180h70v120H0zM100 0h70v300h-70zm100 60h70v240h-70zm100 140h70v100h-70z" transform="translate(66 106)" style="fill:#1a1a1a"/>
-</svg>`;
-
-// Public directory
-const publicDir = path.join(__dirname, '..', 'public');
-
-// Ensure public directory exists
-if (!fs.existsSync(publicDir)) {
-  fs.mkdirSync(publicDir, { recursive: true });
+function renderIcon(adaptive = false) {
+  const tile = adaptive
+    ? `<rect width="64" height="64" fill="${background}"/>`
+    : `<rect x="1.5" y="1.5" width="61" height="61" rx="14" fill="${background}" stroke="#f5c6b7" stroke-width="3"/>`;
+  // Keep the mark inside the Android maskable icon's central safe circle.
+  const glyph = adaptive ? `<g transform="translate(4.8 4.8) scale(.85)">${mark}</g>` : mark;
+  return Buffer.from(`<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <title>Rowing Dynamics</title>
+  ${tile}
+  ${glyph}
+</svg>\n`);
 }
 
-async function generateIcons() {
-  try {
-    console.log('Generating PWA icons from SVG...');
+const favicon = renderIcon();
+const adaptiveIcon = renderIcon(true);
 
-    // Create SVG buffer
-    const svgBuffer = Buffer.from(svgContent);
-
-    // Generate 192x192 PNG (for pwa-192x192.png)
-    await sharp(svgBuffer)
-      .resize(192, 192)
-      .png()
-      .toFile(path.join(publicDir, 'pwa-192x192.png'));
-
-    console.log('✓ Generated pwa-192x192.png');
-
-    // Generate 512x512 PNG (for pwa-512x512.png)
-    await sharp(svgBuffer)
-      .resize(512, 512)
-      .png()
-      .toFile(path.join(publicDir, 'pwa-512x512.png'));
-
-    console.log('✓ Generated pwa-512x512.png');
-
-    // Generate 180x180 PNG (for apple-touch-icon.png)
-    await sharp(svgBuffer)
-      .resize(180, 180)
-      .png()
-      .toFile(path.join(publicDir, 'apple-touch-icon.png'));
-
-    console.log('✓ Generated apple-touch-icon.png');
-
-    // Generate 512x512 PNG with white background for masked-icon
-    const maskedSvgContent = `<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <title>Rowing Stats Visualizer - Maskable</title>
-  <rect width="512" height="512" fill="white"/>
-  <path d="M0 180h70v120H0zM100 0h70v300h-70zm100 60h70v240h-70zm100 140h70v100h-70z" transform="translate(66 106)" style="fill:#1a1a1a"/>
-</svg>`;
-
-    await sharp(Buffer.from(maskedSvgContent))
-      .resize(512, 512)
-      .png()
-      .toFile(path.join(publicDir, 'masked-icon.png'));
-
-    console.log('✓ Generated masked-icon.png');
-
-    // Generate favicon.ico with multiple sizes embedded
-    // ICO typically contains 16x16, 32x32, 48x48 sizes
-    const faviconSizes = [16, 32, 48];
-    const icoData = [];
-
-    for (const size of faviconSizes) {
-      const pngData = await sharp(svgBuffer)
-        .resize(size, size)
-        .png()
-        .toBuffer();
-
-      icoData.push({
-        data: pngData,
-        size,
-      });
-    }
-
-    // Use sharp to create multi-size favicon.ico
-    // We'll create separate sizes and convert to ICO format
-    const largestIcon = await sharp(svgBuffer)
-      .resize(256, 256)
-      .png()
-      .toBuffer();
-
-    // Note: sharp can output ICO directly from PNG
-    await sharp(largestIcon)
-      .resize(32, 32)
-      .toFile(path.join(publicDir, 'favicon.ico'));
-
-    console.log('✓ Generated favicon.ico');
-
-    console.log('\n✅ All PWA icons generated successfully!');
-    console.log('Files created in:', publicDir);
-
-  } catch (error) {
-    console.error('Error generating icons:', error);
-    process.exit(1);
-  }
+function png(icon, size) {
+  return sharp(icon, { density: 576 }).resize(size, size).png();
 }
 
-generateIcons();
+async function writeIco() {
+  const sizes = [16, 32, 48];
+  const images = await Promise.all(sizes.map(size => png(favicon, size).toBuffer()));
+  // ICO directory followed by a PNG at each advertised size.
+  const directory = Buffer.alloc(6 + 16 * sizes.length);
+  directory.writeUInt16LE(1, 2);
+  directory.writeUInt16LE(sizes.length, 4);
+  let offset = directory.length;
+  images.forEach((data, index) => {
+    const entry = 6 + 16 * index;
+    directory[entry] = sizes[index];
+    directory[entry + 1] = sizes[index];
+    directory.writeUInt16LE(1, entry + 4);
+    directory.writeUInt16LE(32, entry + 6);
+    directory.writeUInt32LE(data.length, entry + 8);
+    directory.writeUInt32LE(offset, entry + 12);
+    offset += data.length;
+  });
+  await writeFile(publicFile('rowing-tab.ico'), Buffer.concat([directory, ...images]));
+}
+
+await Promise.all([
+  writeFile(publicFile('rowing-icon.svg'), favicon),
+  writeIco(),
+  png(favicon, 192).toFile(fileURLToPath(publicFile('rowing-app-192.png'))),
+  png(favicon, 512).toFile(fileURLToPath(publicFile('rowing-app-512.png'))),
+  png(adaptiveIcon, 512).toFile(fileURLToPath(publicFile('rowing-maskable-512.png'))),
+  png(adaptiveIcon, 180).toFile(fileURLToPath(publicFile('rowing-touch-180.png'))),
+]);
