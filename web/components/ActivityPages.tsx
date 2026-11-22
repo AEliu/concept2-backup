@@ -74,7 +74,7 @@ function ActivityChart({ activity }: { activity: ActivityDetail }) {
     ? activity.official.pace : undefined;
   const available = metrics.filter(metric => (metric.index === 1 && officialPace)
     || activity.segments.some(segment => segment.points.some(point => point[metric.index] !== null)));
-  const [requestedMetric, setMetric] = useState<MetricIndex>(1);
+  const [requestedMetric, setMetric] = useState<MetricIndex>();
   const metric = available.find(option => option.index === requestedMetric) ?? available[0];
   const usesOfficialPace = metric?.index === 1 && officialPace !== undefined;
   const duration = usesOfficialPace ? officialPace.duration : activity.duration;
@@ -104,7 +104,7 @@ function ActivityChart({ activity }: { activity: ActivityDetail }) {
             {usesOfficialPace ? ' · Concept2 Logbook' : ''}
             {chartSegments.some(segment => segment.resting) ? ' · shaded bands mark recovery' : ''}</p>
         </div>
-        {available.length > 1 && <div className="segmented-control" role="group" aria-label="Training trace metric">
+        {available.length > 1 && <div className="trace-metric-control" role="group" aria-label="Training trace metric">
           {available.map(option => <button key={option.index} type="button" aria-pressed={metric.index === option.index}
             onClick={() => setMetric(option.index)}>{option.label}</button>)}
         </div>}

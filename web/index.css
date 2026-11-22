@@ -66,10 +66,48 @@ main:focus { outline: none; }
 .clickable-bars .recharts-rectangle { cursor: pointer; }
 .recharts-default-tooltip { font-size: 0.8rem; }
 
-.segmented-control { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--soft-line); background: var(--paper); }
+.segmented-control, .trace-metric-control { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--soft-line); background: var(--paper); }
 .segmented-control button { padding: 6px 9px; min-height: 32px; font-size: 0.75rem; color: var(--muted); }
 .segmented-control button[aria-pressed="true"] { color: white; background: var(--ink); }
 .segmented-control button:hover:not([aria-pressed="true"]), .record-list a:hover { background: #ede9e1; }
+.trace-metric-control {
+  --trace-hover-shadow: 0 1px 4px rgb(36 35 31 / 24%);
+  padding: 3px;
+  border-radius: 8px;
+}
+.trace-metric-control button {
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  color: var(--trace-option-ink, var(--muted));
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.trace-metric-control button[aria-pressed="true"] {
+  color: var(--trace-selected-ink, #fff);
+  background: var(--trace-selected-surface, #542329);
+}
+.trace-metric-control button:focus-visible {
+  outline-color: var(--trace-focus, var(--wine));
+  outline-offset: 1px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .trace-metric-control button:hover { box-shadow: var(--trace-hover-shadow); }
+}
+@media (pointer: coarse) {
+  .trace-metric-control button { min-height: 44px; }
+}
+@media (prefers-color-scheme: dark) {
+  .trace-metric-control {
+    --trace-option-ink: #f3eaec;
+    --trace-selected-ink: #43242b;
+    --trace-selected-surface: #f2dbe0;
+    --trace-focus: #f5cad2;
+    --trace-hover-shadow: 0 0 0 1px rgb(255 237 242 / 28%), 0 2px 4px rgb(0 0 0 / 35%);
+    border-color: #51444c;
+    background: #25212a;
+  }
+}
 .text-button, .back-link { color: var(--wine); font-size: 0.84rem; text-decoration: underline; text-underline-offset: 3px; }
 
 .record-list { margin: 0; padding: 0; list-style: none; }
