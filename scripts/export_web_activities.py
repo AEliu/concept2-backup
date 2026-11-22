@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 from collections import deque
 from pathlib import Path
 
-from activity_stats import activity_date, activity_id, tcx_distance
+from activity_stats import activity_date, activity_id, parse_tcx_activities
 
 PACE_WINDOW_SECONDS = 10
 
@@ -72,11 +72,8 @@ def lap_points(lap: ET.Element, start: float, end: float, resting: bool) -> list
 
 
 def activity_payload(path: Path, result_id: int) -> tuple[dict, dict]:
-    content = path.read_bytes()
-    distance = tcx_distance(content)
-    root = ET.fromstring(content)
-    activities = root.findall("{*}Activities/{*}Activity")
-    started_at = timestamp(activities[0].findtext("{*}Id"))
+    activities = parse_tcx_activities(path.read_bytes())
+    started_at = timestamp(activities[0][0].findtext("{*}Id"))
     date = activity_date(path.name) or (started_at.date().isoformat() if started_at else None)
     if date is None:
         raise ValueError("Undated file has no activity timestamp")
@@ -84,12 +81,9 @@ def activity_payload(path: Path, result_id: int) -> tuple[dict, dict]:
     segments = []
     elapsed = work_distance = rest_seconds = 0.0
     timing_complete = True
-    for activity in activities:
-        for lap in activity.findall("{*}Lap"):
+    for _, laps in activities:
+        for lap, meters in laps:
             seconds = number(lap.findtext("{*}TotalTimeSeconds"))
-            meters = number(lap.findtext("{*}DistanceMeters"))
-            if meters is None:
-                raise ValueError("Lap distance is invalid")
             timing_complete = timing_complete and seconds is not None
             resting = lap.findtext("{*}Intensity", "").strip().lower() == "resting"
             segment = {
@@ -110,7 +104,8 @@ def activity_payload(path: Path, result_id: int) -> tuple[dict, dict]:
 
     summary = {
         "id": str(result_id), "date": date, "startedAt": started_at.isoformat() if started_at else None,
-        "distance": distance, "duration": round(elapsed, 1) if timing_complete else None, "restSeconds": round(rest_seconds, 1),
+        "distance": int(sum(segment["distance"] for segment in segments)),
+        "duration": round(elapsed, 1) if timing_complete else None, "restSeconds": round(rest_seconds, 1),
         "workDistance": round(work_distance, 1),
     }
     return summary, {**summary, "segments": segments}
@@ -126,6 +121,8 @@ def export_activities(data: Path, output: Path) -> None:
         staging = Path(temp) / "activities"
         details = staging / "details"
         details.mkdir(parents=True)
+        months = staging / "months"
+        months.mkdir()
         summaries = {}
         for path in sorted(data.glob("*/*.tcx")):
             result_id = activity_id(path.name)
@@ -140,8 +137,14 @@ def export_activities(data: Path, output: Path) -> None:
             summaries[result_id] = summary
             write_json(details / f"{result_id}.json", detail)
 
-        ordered = sorted(summaries.values(), key=lambda row: (row["date"], row["startedAt"] or "", int(row["id"])), reverse=True)
-        write_json(staging / "index.json", ordered)
+        ordered = sorted(summaries.values(), key=lambda row: (row["startedAt"] or "", int(row["id"])), reverse=True)
+        dates_by_month = {}
+        for summary in ordered:
+            date = summary["date"]
+            days = dates_by_month.setdefault(date[:7], {})
+            days.setdefault(date, []).append(summary)
+        for month, days in dates_by_month.items():
+            write_json(months / f"{month}.json", days)
         if output.exists():
             shutil.rmtree(output)
         staging.rename(output)

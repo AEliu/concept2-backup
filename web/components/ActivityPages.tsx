@@ -9,6 +9,8 @@ import { calculatePace, distanceMeters, formatDuration, formatPace } from '../ut
 const fullDate = (date: string) => dateLabel(date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 const localTime = new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-digit' });
 const base = import.meta.env.BASE_URL;
+type MonthlyActivities = Record<string, ActivitySummary[]>;
+const emptyMonth: MonthlyActivities = {};
 export const dayHref = (date: string) => `${base}?date=${date}`;
 export const activityHref = (id: string) => `${base}?activity=${id}`;
 
@@ -26,16 +28,16 @@ export function ActivityDay({ date, distance }: { date: string; distance?: numbe
 }
 
 function DayRecords({ date, distance }: { date: string; distance?: number }) {
-  const index = useJson<ActivitySummary[]>('activities/index.json');
-  const records = index.status === 'ready' ? index.data.filter(activity => activity.date === date) : [];
+  const month = useJson(`activities/months/${date.slice(0, 7)}.json`, emptyMonth);
+  const records = month.status === 'ready' ? month.data[date] ?? [] : [];
   const total = records.reduce((sum, activity) => sum + activity.distance, 0);
 
   return (
     <section className="panel" aria-labelledby="day-records">
       <h2 id="day-records">Recorded activities</h2>
-      {index.status === 'loading' && <p className="page-message" role="status">Loading activities…</p>}
-      {index.status === 'error' && <p className="page-message" role="alert">Could not load the activity list. Refresh to try again.</p>}
-      {index.status === 'ready' && records.length === 0 && <p className="page-message">No individual activity files are available for this date.</p>}
+      {month.status === 'loading' && <p className="page-message" role="status">Loading activities…</p>}
+      {month.status === 'error' && <p className="page-message" role="alert">Could not load the activity list. Refresh to try again.</p>}
+      {month.status === 'ready' && records.length === 0 && <p className="page-message">No individual activity files are available for this date.</p>}
       {records.length > 0 && <>
         <ul className="record-list day-records">
           {records.map((activity, index) => (

@@ -41,7 +41,7 @@ function Dashboard({ onDay }: { onDay: (date: string) => void }) {
 
   const demo = resource.status === 'error';
   const data = resource.status === 'ready' ? resource.data.daily_distances : demoDistances(today);
-  const stats = calculateDerivedStats(data);
+  const stats = calculateDerivedStats(data, today);
   const recent = dailyVolume(data, today);
   const recentTotal = recent.reduce((sum, day) => sum + day.meters, 0);
   const daysLogged = recent.filter(day => day.meters > 0).length;

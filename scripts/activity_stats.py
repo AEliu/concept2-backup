@@ -65,8 +65,10 @@ def tcx_path(data_dir: Path, result: dict) -> Path:
     return target
 
 
-def tcx_distance(content: bytes) -> int:
-    """Validate a downloaded TCX and return its summed lap distance."""
+def parse_tcx_activities(
+    content: bytes,
+) -> list[tuple[ET.Element, list[tuple[ET.Element, float]]]]:
+    """Parse and validate TCX activities and their lap distances."""
     try:
         root = ET.fromstring(content)
     except ET.ParseError as exc:
@@ -82,7 +84,7 @@ def tcx_distance(content: bytes) -> int:
     if not groups:
         raise ValueError("TCX has no activities")
     activities = []
-    laps = []
+    direct_lap_count = 0
     for group in groups:
         group_activities = [child for child in group if local_name(child) == "Activity"]
         if not group_activities:
@@ -91,26 +93,38 @@ def tcx_distance(content: bytes) -> int:
             activity_laps = [child for child in activity if local_name(child) == "Lap"]
             if not activity_laps:
                 raise ValueError("TCX has an empty activity")
-            laps.extend(activity_laps)
-        activities.extend(group_activities)
-    if len(activities) != sum(local_name(node) == "Activity" for node in root.iter()):
-        raise ValueError("TCX has an activity outside Activities")
-    if len(laps) != sum(local_name(node) == "Lap" for node in root.iter()):
-        raise ValueError("TCX has a lap outside an activity")
+            laps = []
+            for lap in activity_laps:
+                fields = [child for child in lap if local_name(child) == "DistanceMeters"]
+                if len(fields) != 1:
+                    raise ValueError("TCX lap needs one distance")
+                try:
+                    value = float(fields[0].text)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("Invalid TCX lap distance") from exc
+                if not math.isfinite(value) or value < 0:
+                    raise ValueError("Invalid TCX lap distance")
+                laps.append((lap, value))
+            activities.append((activity, laps))
+            direct_lap_count += len(laps)
 
-    distances = []
-    for lap in laps:
-        fields = [child for child in lap if local_name(child) == "DistanceMeters"]
-        if len(fields) != 1:
-            raise ValueError("TCX lap needs one distance")
-        try:
-            value = float(fields[0].text)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Invalid TCX lap distance") from exc
-        if not math.isfinite(value) or value < 0:
-            raise ValueError("Invalid TCX lap distance")
-        distances.append(value)
-    return int(sum(distances))
+    activity_count = lap_count = 0
+    for node in root.iter():
+        name = local_name(node)
+        if name == "Activity":
+            activity_count += 1
+        elif name == "Lap":
+            lap_count += 1
+    if len(activities) != activity_count:
+        raise ValueError("TCX has an activity outside Activities")
+    if lap_count != direct_lap_count:
+        raise ValueError("TCX has a lap outside an activity")
+    return activities
+
+
+def tcx_distance(content: bytes) -> int:
+    """Validate a downloaded TCX and return its summed lap distance."""
+    return int(sum(meters for _, laps in parse_tcx_activities(content) for _, meters in laps))
 
 
 def write_atomically(path: Path, content: bytes) -> None:

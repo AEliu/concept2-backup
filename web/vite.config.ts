@@ -89,11 +89,11 @@ export default defineConfig(({ mode }) => {
               }
             },
             {
-              urlPattern: /\/activities\/index\.json$/i,
+              urlPattern: /\/activities\/months\/\d{4}-\d{2}\.json$/i,
               handler: 'NetworkFirst',
               options: {
-                cacheName: 'activity-index-cache',
-                expiration: { maxEntries: 1, maxAgeSeconds: 60 * 60 * 24 * 7 }
+                cacheName: 'activity-month-cache',
+                expiration: { maxEntries: 24, maxAgeSeconds: 60 * 60 * 24 * 7 }
               }
             },
             {

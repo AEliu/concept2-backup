@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "python3 ../scripts/export_web_activities.py && vite",
-    "build": "python3 ../scripts/export_web_activities.py && vite build",
+    "dev": "uv run --python 3.13 ../scripts/export_web_activities.py && vite",
+    "build": "uv run --python 3.13 ../scripts/export_web_activities.py && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

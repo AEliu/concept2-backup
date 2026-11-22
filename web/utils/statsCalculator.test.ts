@@ -1,9 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { calculateDerivedStats } from './statsCalculator';
 import { DailyDistances } from '@/types';
 
 describe('statsCalculator', () => {
   describe('calculateDerivedStats', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(2025, 10, 21, 12));
+    });
+    afterEach(() => vi.useRealTimers());
+
     it('should return zero values for empty data', () => {
       const emptyData: DailyDistances = {};
       const result = calculateDerivedStats(emptyData);
@@ -149,6 +155,19 @@ describe('statsCalculator', () => {
       const result = calculateDerivedStats(data);
 
       expect(result.lastWorkoutDate).toBe('2024-11-21');
+    });
+
+    it('should exclude future distance when today is the first of the month', () => {
+      const result = calculateDerivedStats({
+        '2024-12-31': 3000,
+        '2025-01-01': 5000,
+        '2025-01-02': 5200,
+      }, '2025-01-01');
+
+      expect(result.totalDistance).toBe(8000);
+      expect(result.thisYearDistance).toBe(5000);
+      expect(result.thisMonthDistance).toBe(5000);
+      expect(result.lastWorkoutDate).toBe('2025-01-01');
     });
 
     it('should handle data with gaps correctly', () => {

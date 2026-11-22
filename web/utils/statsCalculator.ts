@@ -1,8 +1,7 @@
 import type { DailyDistances, DerivedStats } from '../types';
 import { daysBetween, todayKey } from './calendar';
 
-export const calculateDerivedStats = (dailyDistances: DailyDistances): DerivedStats => {
-  const today = todayKey();
+export const calculateDerivedStats = (dailyDistances: DailyDistances, today = todayKey()): DerivedStats => {
   const year = today.slice(0, 4);
   const month = today.slice(0, 7);
   const dates = Object.keys(dailyDistances).filter(date => date <= today).sort();

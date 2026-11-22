@@ -37,10 +37,15 @@ class WebActivitiesTests(unittest.TestCase):
             directory.mkdir(parents=True)
             (directory / "2026_11_12_124.tcx").write_text(tcx("<TotalTimeSeconds>10</TotalTimeSeconds>"))
             (directory / "2026_11_12_123.tcx").write_text(tcx(""))
+            (directory / "2026_10_12_122.tcx").write_text(tcx(""))
             output = root / "web" / "public" / "activities"
 
             export_activities(root / "data", output)
-            summaries = json.loads((output / "index.json").read_text())
+            november = json.loads((output / "months/2026-11.json").read_text())
+            october = json.loads((output / "months/2026-10.json").read_text())
+            self.assertEqual(list(november), ["2026-11-12"])
+            self.assertEqual([row["id"] for row in october["2026-10-12"]], ["122"])
+            summaries = november["2026-11-12"]
             self.assertEqual([row["id"] for row in summaries], ["124", "123"])
             self.assertEqual(summaries[0]["distance"], 52)
             self.assertEqual(summaries[0]["workDistance"], 40)
@@ -54,5 +59,7 @@ class WebActivitiesTests(unittest.TestCase):
             self.assertIsNone(summaries[1]["duration"])
 
             (directory / "2026_11_12_123.tcx").unlink()
+            (directory / "2026_10_12_122.tcx").unlink()
             export_activities(root / "data", output)
             self.assertFalse((output / "details/123.json").exists())
+            self.assertFalse((output / "months/2026-10.json").exists())
