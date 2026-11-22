@@ -100,9 +100,7 @@ function ActivityChart({ activity }: { activity: ActivityDetail }) {
       <div className="panel-header">
         <div>
           <h2 id="trace-heading">Training trace</h2>
-          <p className="panel-caption">{metric.index === 1 ? `Pace per ${paceMeters} m` : metric.axis}
-            {usesOfficialPace ? ' · Concept2 Logbook' : ''}
-            {chartSegments.some(segment => segment.resting) ? ' · shaded bands mark recovery' : ''}</p>
+          <p className="panel-caption">{metric.index === 1 ? `Pace per ${paceMeters} m` : metric.axis}</p>
         </div>
         {available.length > 1 && <div className="trace-metric-control" role="group" aria-label="Training trace metric">
           {available.map(option => <button key={option.index} type="button" aria-pressed={metric.index === option.index}
@@ -127,7 +125,10 @@ function ActivityChart({ activity }: { activity: ActivityDetail }) {
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <p className="chart-note">Elapsed time{usesOfficialPace ? ' · per-stroke pace' : metric.index === 1 ? ' · pace averaged over about 10 s' : ''}</p>
+      <p className="chart-note">
+        Elapsed time{usesOfficialPace ? ' · per-stroke pace · Concept2 Logbook' : metric.index === 1 ? ' · pace averaged over about 10 s' : ''}
+      </p>
+      {chartSegments.some(segment => segment.resting) && <p className="chart-note">Shaded bands mark recovery.</p>}
     </section>
   );
 }
