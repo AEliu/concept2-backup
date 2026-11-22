@@ -42,6 +42,7 @@ function Dashboard({ onDay }: { onDay: (date: string) => void }) {
   const demo = resource.status === 'error';
   const data = resource.status === 'ready' ? resource.data.daily_distances : demoDistances(today);
   const stats = calculateDerivedStats(data, today);
+  const lastTrainingDay = stats.lastWorkoutDate;
   const recent = dailyVolume(data, today);
   const recentTotal = recent.reduce((sum, day) => sum + day.meters, 0);
   const daysLogged = recent.filter(day => day.meters > 0).length;
@@ -52,10 +53,12 @@ function Dashboard({ onDay }: { onDay: (date: string) => void }) {
     <>
       {demo && <p className="demo-banner" role="status">Demo data · live training data is unavailable.</p>}
       <dl className="metric-strip dashboard-metrics" aria-label="Training overview">
-        <StatCard label="Distance · 30 days" value={distanceKm(recentTotal)} unit="km" accent />
+        <StatCard label="Distance · 30 days" value={distanceKm(recentTotal)} unit="km" valueAccent />
         <StatCard label="Training days · 30 days" value={daysLogged} unit="/ 30" />
         <StatCard label="This month" value={distanceKm(stats.thisMonthDistance)} unit="km" />
-        <StatCard label="Last training day" value={lastRecords[0] ? dateLabel(lastRecords[0][0]) : '—'} />
+        <StatCard label="Last training day"
+          value={lastTrainingDay ? dateLabel(lastTrainingDay) : '—'}
+          href={!demo && lastTrainingDay ? dayHref(lastTrainingDay) : undefined} />
       </dl>
       <div className="dashboard-panels">
         <TrainingVolume data={data} today={today} onDay={demo ? undefined : onDay} />
