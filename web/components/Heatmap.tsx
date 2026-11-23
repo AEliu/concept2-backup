@@ -59,21 +59,23 @@ export function Heatmap({ data, today, dayHref }: {
           {showYear ? 'Show 12 weeks' : 'Show full year'}
         </button>}
       </div>
-      <div ref={scroll} className="calendar-scroll">
-        <div className={`calendar-layout ${compact && showYear ? 'calendar-wide' : ''}`} style={{ '--weeks': weeks } as CSSProperties}>
-          <div className="calendar-months" aria-hidden="true">
-            {monthLabels.map(({ month, column }) => <span key={column} style={{ gridColumn: column }}>{month}</span>)}
-          </div>
-          <div className="calendar-weekdays" aria-hidden="true"><span>Mon</span><span>Wed</span><span>Fri</span></div>
-          <div className="calendar-cells">
-            {dates.map(date => {
-              if (date < first || date > today) return <span key={date} aria-hidden="true" />;
-              const meters = data[date] ?? 0;
-              const title = `${dateLabel(date, { month: 'long', day: 'numeric', year: 'numeric' })} · ${distanceMeters(meters)} m`;
-              return meters > 0 && dayHref
-                ? <a key={date} className={`calendar-cell level-${level(meters)}`} href={dayHref(date)} data-route aria-label={title} title={title} />
-                : <span key={date} className={`calendar-cell level-${level(meters)}`} title={title} />;
-            })}
+      <div className={`calendar-frame${compact && showYear ? ' calendar-expanded' : ''}`}>
+        <div className="calendar-weekdays" aria-hidden="true"><span>Mon</span><span>Wed</span><span>Fri</span></div>
+        <div ref={scroll} className="calendar-scroll">
+          <div className="calendar-layout" style={{ '--weeks': weeks } as CSSProperties}>
+            <div className="calendar-months" aria-hidden="true">
+              {monthLabels.map(({ month, column }) => <span key={column} style={{ gridColumn: column }}>{month}</span>)}
+            </div>
+            <div className="calendar-cells">
+              {dates.map(date => {
+                if (date < first || date > today) return <span key={date} aria-hidden="true" />;
+                const meters = data[date] ?? 0;
+                const title = `${dateLabel(date, { month: 'long', day: 'numeric', year: 'numeric' })} · ${distanceMeters(meters)} m`;
+                return meters > 0 && dayHref
+                  ? <a key={date} className={`calendar-cell level-${level(meters)}`} href={dayHref(date)} data-route aria-label={title} title={title} />
+                  : <span key={date} className={`calendar-cell level-${level(meters)}`} title={title} />;
+              })}
+            </div>
           </div>
         </div>
       </div>

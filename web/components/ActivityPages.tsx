@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { CartesianGrid, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useJson } from '../hooks/useJson';
 import { StatCard } from './StatCard';
-import type { ActivityDetail, ActivitySummary } from '../types';
+import type { ActivityDetail, ActivitySummary, OfficialSegment } from '../types';
 import { dateLabel } from '../utils/calendar';
 import { calculatePace, distanceMeters, formatDuration, formatPace } from '../utils/format';
 
@@ -68,8 +68,26 @@ const metrics = [
 ] as const;
 
 type MetricIndex = typeof metrics[number]['index'];
+const traceColor = '#872e38';
 
-function ActivityChart({ activity }: { activity: ActivityDetail }) {
+function summarizeOfficialIntervals(segments?: OfficialSegment[]) {
+  if (!segments?.some(segment => segment.resting)) return;
+
+  let workTime = 0;
+  let restSeconds = 0;
+  let workDistance: number | null = 0;
+  for (const segment of segments) {
+    if (segment.resting) {
+      restSeconds += segment.seconds;
+    } else {
+      workTime += segment.seconds;
+      workDistance = workDistance === null || segment.distance === null ? null : workDistance + segment.distance;
+    }
+  }
+  return { workTime, restSeconds, workDistance };
+}
+
+function ActivityChart({ activity, officialElapsed }: { activity: ActivityDetail; officialElapsed?: number }) {
   const officialPace = activity.official?.paceMeters && activity.official.pace?.segments.some(segment => segment.points.length > 0)
     ? activity.official.pace : undefined;
   const available = metrics.filter(metric => (metric.index === 1 && officialPace)
@@ -94,6 +112,9 @@ function ActivityChart({ activity }: { activity: ActivityDetail }) {
   const paceMeters = usesOfficialPace ? activity.official?.paceMeters : 500;
   const unit = metric.index === 1 ? `/${paceMeters} m` : metric.unit;
   const formatValue = (value: number) => metric.index === 1 ? formatPace(value) : String(Math.round(value));
+  const timelineNote = !usesOfficialPace && officialElapsed !== undefined && Math.round(duration) !== Math.round(officialElapsed)
+    ? `TCX trace ends at ${formatDuration(duration)}. Concept2 Logbook intervals total ${formatDuration(officialElapsed)}.`
+    : null;
 
   return (
     <section className="panel trace-panel" aria-labelledby="trace-heading">
@@ -121,7 +142,13 @@ function ActivityChart({ activity }: { activity: ActivityDetail }) {
               <ReferenceArea key={index} x1={segment.start} x2={Math.min(segment.start + (segment.seconds ?? 0), duration)}
                 fill="#b9b3a8" fillOpacity={0.24} />
             ))}
-            <Line dataKey="value" stroke="#872e38" strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
+            <Line dataKey="value" stroke={traceColor} strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
+            {/* Recharts already draws a dot for a data array with only one entry. */}
+            {metric.index === 1 && points.length > 1 && points.map((point, index) => (
+              point.value !== null && points[index - 1]?.value == null && points[index + 1]?.value == null
+                ? <ReferenceDot key={index} x={point.time} y={point.value} r={4} fill={traceColor} stroke="none" />
+                : null
+            ))}
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -129,6 +156,7 @@ function ActivityChart({ activity }: { activity: ActivityDetail }) {
         Elapsed time{usesOfficialPace ? ' · per-stroke pace · Concept2 Logbook' : metric.index === 1 ? ' · pace averaged over about 10 s' : ''}
       </p>
       {chartSegments.some(segment => segment.resting) && <p className="chart-note">Shaded bands mark recovery.</p>}
+      {timelineNote && <p className="chart-note">{timelineNote}</p>}
     </section>
   );
 }
@@ -147,10 +175,15 @@ export function ActivityPage({ id }: { id: string }) {
   );
 
   const activity = detail.data;
-  const workTime = activity.duration === null ? null : activity.duration - activity.restSeconds;
-  const hasRecovery = workTime !== null && activity.restSeconds > 0;
-  const averagePace = workTime === null ? null : calculatePace(activity.workDistance, workTime);
   const officialSegments = activity.official?.segments;
+  const officialIntervals = summarizeOfficialIntervals(officialSegments);
+  const workTime = officialIntervals?.workTime ?? (activity.duration === null ? null : activity.duration - activity.restSeconds);
+  const restSeconds = officialIntervals?.restSeconds ?? activity.restSeconds;
+  const hasRecovery = workTime !== null && restSeconds > 0;
+  const workDistance = officialIntervals ? officialIntervals.workDistance : activity.workDistance;
+  const summaryPaceMeters = officialIntervals ? activity.official?.paceMeters : 500;
+  const averagePace = workTime === null || workDistance === null || !summaryPaceMeters
+    ? null : calculatePace(workDistance, workTime, summaryPaceMeters);
   const useOfficialSegments = Boolean(officialSegments?.length);
   const tableSegments = officialSegments?.length ? officialSegments : activity.segments;
   const paceMeters = useOfficialSegments ? activity.official?.paceMeters : 500;
@@ -165,10 +198,12 @@ export function ActivityPage({ id }: { id: string }) {
       <dl className="metric-strip detail-metrics">
         <StatCard label={hasRecovery ? 'Total distance' : 'Distance'} value={distanceMeters(activity.distance)} unit="m" />
         <StatCard label={hasRecovery ? 'Work time' : 'Duration'} value={workTime === null ? '—' : formatDuration(workTime)} />
-        <StatCard label={hasRecovery ? 'Average work pace' : 'Average pace'} value={formatPace(averagePace)} unit="/500 m" accent />
-        {hasRecovery && <StatCard label="Recovery time" value={formatDuration(activity.restSeconds)} />}
+        <StatCard label={hasRecovery ? 'Average work pace' : 'Average pace'} value={formatPace(averagePace)}
+          unit={summaryPaceMeters ? `/${summaryPaceMeters} m` : undefined} accent />
+        {hasRecovery && <StatCard label="Recovery time" value={formatDuration(restSeconds)} />}
       </dl>
-      <ActivityChart activity={activity} />
+      {officialIntervals && <p className="chart-note">Work and recovery use Concept2 Logbook intervals. Total distance uses TCX.</p>}
+      <ActivityChart activity={activity} officialElapsed={officialIntervals && officialIntervals.workTime + officialIntervals.restSeconds} />
       {(useOfficialSegments || tableSegments.length > 1) && <section className="panel">
         <h2>Workout segments</h2>
         {useOfficialSegments && <p className="panel-caption">Concept2 Logbook</p>}

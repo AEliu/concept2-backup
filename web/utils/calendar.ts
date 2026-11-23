@@ -13,6 +13,12 @@ function calendarDate(date: string) {
   return new Date(`${date}T00:00:00Z`);
 }
 
+export function isCalendarDate(date: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const parsed = calendarDate(date);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
+}
+
 export function addDays(date: string, days: number) {
   return new Date(calendarDate(date).getTime() + days * dayMs).toISOString().slice(0, 10);
 }

@@ -9,7 +9,7 @@ import { TrainingVolume } from './components/TrainingVolume';
 import { useJson } from './hooks/useJson';
 import { usePWA } from './hooks/usePWA';
 import type { DailyDistances, StatsData } from './types';
-import { addDays, dailyVolume, dateLabel, todayKey } from './utils/calendar';
+import { addDays, dailyVolume, dateLabel, isCalendarDate, todayKey } from './utils/calendar';
 import { distanceKm } from './utils/format';
 import { calculateDerivedStats } from './utils/statsCalculator';
 
@@ -20,12 +20,7 @@ function readRoute(search: string): Route {
   const id = query.get('activity');
   if (id && /^[1-9]\d{0,15}$/.test(id)) return { page: 'activity', id };
   const date = query.get('date');
-  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    const parsed = new Date(`${date}T00:00:00Z`);
-    if (!Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date) {
-      return { page: 'day', date };
-    }
-  }
+  if (date && isCalendarDate(date)) return { page: 'day', date };
   return { page: 'dashboard' };
 }
 
@@ -87,7 +82,7 @@ function DayRoute({ date }: { date: string }) {
 function App() {
   const [search, setSearch] = useState(() => window.location.search);
   const route = readRoute(search);
-  const { needRefresh, offlineReady, updateServiceWorker } = usePWA();
+  const { needRefresh, offlineReady, dismissOfflineReady, updateServiceWorker } = usePWA();
 
   useEffect(() => {
     const onPopState = () => setSearch(window.location.search);
@@ -125,7 +120,7 @@ function App() {
         <a href="https://github.com/Aeliu/concept2-backup" target="_blank" rel="noreferrer">GitHub source ↗︎</a>
       </footer>
       {needRefresh && <PWAToast message="New version available" actionLabel="Update" onAction={() => updateServiceWorker(true)} />}
-      {offlineReady && !needRefresh && <PWAToast message="App ready to work offline" onClose={() => {}} />}
+      {offlineReady && !needRefresh && <PWAToast message="Training data available offline" onClose={dismissOfflineReady} />}
     </div>
   );
 }
