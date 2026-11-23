@@ -1,10 +1,11 @@
 import { useEffect, useState, type MouseEvent } from 'react';
-import { ActivityDay, ActivityPage, dayHref } from './components/ActivityPages';
+import { ActivityDay, ActivityPage, dayHref, monthHref } from './components/ActivityPages';
 import { Header } from './components/Header';
 import { Heatmap } from './components/Heatmap';
 import { PWAToast } from './components/PWAToast';
 import { RecentRecords } from './components/RecentRecords';
 import { StatCard } from './components/StatCard';
+import { TrainingMonth } from './components/TrainingMonth';
 import { TrainingVolume } from './components/TrainingVolume';
 import { useJson } from './hooks/useJson';
 import { usePWA } from './hooks/usePWA';
@@ -13,7 +14,7 @@ import { addDays, dailyVolume, dateLabel, isCalendarDate, todayKey } from './uti
 import { distanceKm } from './utils/format';
 import { calculateDerivedStats } from './utils/statsCalculator';
 
-type Route = { page: 'dashboard' } | { page: 'day'; date: string } | { page: 'activity'; id: string };
+type Route = { page: 'dashboard' } | { page: 'month'; month: string } | { page: 'day'; date: string } | { page: 'activity'; id: string };
 
 function readRoute(search: string): Route {
   const query = new URLSearchParams(search);
@@ -21,6 +22,8 @@ function readRoute(search: string): Route {
   if (id && /^[1-9]\d{0,15}$/.test(id)) return { page: 'activity', id };
   const date = query.get('date');
   if (date && isCalendarDate(date)) return { page: 'day', date };
+  const month = query.get('month');
+  if (month && isCalendarDate(`${month}-01`)) return { page: 'month', month };
   return { page: 'dashboard' };
 }
 
@@ -29,9 +32,8 @@ function demoDistances(today: string): DailyDistances {
     .map((meters, index) => [addDays(today, -((8 - index) * 3)), meters]));
 }
 
-function Dashboard({ onDay }: { onDay: (date: string) => void }) {
+function Dashboard({ today, navigate }: { today: string; navigate: (href: string) => void }) {
   const resource = useJson<StatsData>('stats.json');
-  const today = todayKey();
 
   if (resource.status === 'loading') return <p className="panel page-message" role="status">Loading training data…</p>;
 
@@ -51,13 +53,16 @@ function Dashboard({ onDay }: { onDay: (date: string) => void }) {
       <dl className="metric-strip dashboard-metrics" aria-label="Training overview">
         <StatCard label="Distance · 30 days" value={distanceKm(recentTotal)} unit="km" valueAccent />
         <StatCard label="Training days · 30 days" value={daysLogged} unit="/ 30" />
-        <StatCard label="This month" value={distanceKm(stats.thisMonthDistance)} unit="km" />
+        <StatCard label="This month" value={distanceKm(stats.thisMonthDistance)} unit="km"
+          href={!demo ? monthHref(today.slice(0, 7)) : undefined} />
         <StatCard label="Last training day"
           value={lastTrainingDay ? dateLabel(lastTrainingDay) : '—'}
           href={!demo && lastTrainingDay ? dayHref(lastTrainingDay) : undefined} />
       </dl>
       <div className="dashboard-panels">
-        <TrainingVolume data={data} today={today} onDay={demo ? undefined : onDay} />
+        <TrainingVolume data={data} today={today}
+          onDay={demo ? undefined : date => navigate(dayHref(date))}
+          onMonth={demo ? undefined : month => navigate(monthHref(month))} />
         <RecentRecords records={lastRecords} demo={demo} />
         <Heatmap data={data} today={today} dayHref={demo ? undefined : dayHref} />
       </div>
@@ -81,6 +86,7 @@ function DayRoute({ date }: { date: string }) {
 
 function App() {
   const [search, setSearch] = useState(() => window.location.search);
+  const today = todayKey();
   const route = readRoute(search);
   const { needRefresh, offlineReady, dismissOfflineReady, updateServiceWorker } = usePWA();
 
@@ -90,13 +96,15 @@ function App() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  function navigate(href: string) {
+  function navigate(href: string, focusPage = true) {
     const url = new URL(href, window.location.href);
     if (url.search === window.location.search) return;
     window.history.pushState(null, '', url);
     setSearch(url.search);
-    window.scrollTo(0, 0);
-    document.getElementById('page-content')?.focus({ preventScroll: true });
+    if (focusPage) {
+      window.scrollTo(0, 0);
+      document.getElementById('page-content')?.focus({ preventScroll: true });
+    }
   }
 
   function handleLink(event: MouseEvent<HTMLDivElement>) {
@@ -111,7 +119,9 @@ function App() {
     <div className="site-shell" onClick={handleLink}>
       {route.page === 'dashboard' && <Header />}
       <main id="page-content" tabIndex={-1} className={`site-width ${route.page === 'dashboard' ? 'dashboard' : 'activity-page'}`}>
-        {route.page === 'dashboard' && <Dashboard onDay={date => navigate(dayHref(date))} />}
+        {route.page === 'dashboard' && <Dashboard today={today} navigate={navigate} />}
+        {route.page === 'month' && <TrainingMonth month={route.month} today={today}
+          onMonth={month => navigate(monthHref(month), false)} />}
         {route.page === 'day' && <DayRoute date={route.date} />}
         {route.page === 'activity' && <ActivityPage key={route.id} id={route.id} />}
       </main>

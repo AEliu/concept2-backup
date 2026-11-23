@@ -23,13 +23,28 @@ export function addDays(date: string, days: number) {
   return new Date(calendarDate(date).getTime() + days * dayMs).toISOString().slice(0, 10);
 }
 
+export function addMonths(month: string, months: number) {
+  const date = calendarDate(`${month}-01`);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return date.toISOString().slice(0, 7);
+}
+
+export function daysInMonth(month: string) {
+  const date = calendarDate(`${month}-01`);
+  date.setUTCMonth(date.getUTCMonth() + 1, 0);
+  return date.getUTCDate();
+}
+
 export function daysBetween(first: string, last: string) {
   return (calendarDate(last).getTime() - calendarDate(first).getTime()) / dayMs;
 }
 
+export function weekdayIndex(date: string) {
+  return (calendarDate(date).getUTCDay() + 6) % 7;
+}
+
 export function startOfWeek(date: string) {
-  const weekday = calendarDate(date).getUTCDay();
-  return addDays(date, -((weekday + 6) % 7));
+  return addDays(date, -weekdayIndex(date));
 }
 
 export function dateLabel(date: string, options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }) {
