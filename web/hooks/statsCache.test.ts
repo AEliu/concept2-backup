@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ensureOfflineStats, loadStats } from './statsCache';
 
-const savedStats = { daily_distances: { '2026-11-21': 5000 } };
+const savedStats = { daily_distances: { '2024-02-29': 4000, '2026-11-21': 5000 } };
 const validResponse = () => new Response(JSON.stringify(savedStats), {
   status: 200,
   headers: { 'Content-Type': 'application/json' },
@@ -67,4 +67,20 @@ describe('offline statistics cache', () => {
     expect(await ensureOfflineStats()).toBe(true);
     expect(entries.size).toBe(1);
   });
+
+  it.each(['2026-11-00', '2026-02-29', '2026-04-31'])(
+    'keeps the last valid statistics when the server returns the invalid date %s',
+    async date => {
+      fetchStats.mockResolvedValueOnce(validResponse());
+      expect(await loadStats()).toEqual(savedStats);
+
+      fetchStats.mockResolvedValueOnce(Response.json({
+        daily_distances: { ...savedStats.daily_distances, [date]: 8000 },
+      }));
+      expect(await loadStats()).toEqual(savedStats);
+
+      fetchStats.mockRejectedValueOnce(new TypeError('offline'));
+      expect(await loadStats()).toEqual(savedStats);
+    },
+  );
 });

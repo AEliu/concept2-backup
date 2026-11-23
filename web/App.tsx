@@ -9,7 +9,7 @@ import { TrainingVolume } from './components/TrainingVolume';
 import { useJson } from './hooks/useJson';
 import { usePWA } from './hooks/usePWA';
 import type { DailyDistances, StatsData } from './types';
-import { addDays, dailyVolume, dateLabel, todayKey } from './utils/calendar';
+import { addDays, dailyVolume, dateLabel, isCalendarDate, todayKey } from './utils/calendar';
 import { distanceKm } from './utils/format';
 import { calculateDerivedStats } from './utils/statsCalculator';
 
@@ -20,12 +20,7 @@ function readRoute(search: string): Route {
   const id = query.get('activity');
   if (id && /^[1-9]\d{0,15}$/.test(id)) return { page: 'activity', id };
   const date = query.get('date');
-  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    const parsed = new Date(`${date}T00:00:00Z`);
-    if (!Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date) {
-      return { page: 'day', date };
-    }
-  }
+  if (date && isCalendarDate(date)) return { page: 'day', date };
   return { page: 'dashboard' };
 }
 

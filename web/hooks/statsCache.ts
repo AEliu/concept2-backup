@@ -1,4 +1,5 @@
 import type { StatsData } from '../types';
+import { isCalendarDate } from '../utils/calendar';
 
 const cacheName = 'stats-data-cache';
 const statsUrl = `${import.meta.env.BASE_URL}stats.json`;
@@ -9,7 +10,7 @@ function isStatsData(value: unknown): value is StatsData {
   if (distances === null || typeof distances !== 'object' || Array.isArray(distances)) return false;
 
   return Object.entries(distances).every(([date, meters]) =>
-    /^\d{4}-\d{2}-\d{2}$/.test(date)
+    isCalendarDate(date)
     && typeof meters === 'number'
     && Number.isFinite(meters)
     && meters >= 0,
