@@ -109,17 +109,6 @@ export default defineConfig(({ mode }) => {
                 cacheName: 'activity-detail-cache',
                 expiration: { maxEntries: 24, maxAgeSeconds: 60 * 60 * 24 * 7 }
               }
-            },
-            {
-              urlPattern: /\/stats\.json$/i,
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'stats-data-cache',
-                expiration: {
-                  maxEntries: 5,
-                  maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
-                }
-              }
             }
           ]
         }

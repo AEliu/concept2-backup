@@ -87,7 +87,7 @@ function DayRoute({ date }: { date: string }) {
 function App() {
   const [search, setSearch] = useState(() => window.location.search);
   const route = readRoute(search);
-  const { needRefresh, offlineReady, updateServiceWorker } = usePWA();
+  const { needRefresh, offlineReady, dismissOfflineReady, updateServiceWorker } = usePWA();
 
   useEffect(() => {
     const onPopState = () => setSearch(window.location.search);
@@ -125,7 +125,7 @@ function App() {
         <a href="https://github.com/Aeliu/concept2-backup" target="_blank" rel="noreferrer">GitHub source ↗︎</a>
       </footer>
       {needRefresh && <PWAToast message="New version available" actionLabel="Update" onAction={() => updateServiceWorker(true)} />}
-      {offlineReady && !needRefresh && <PWAToast message="App ready to work offline" onClose={() => {}} />}
+      {offlineReady && !needRefresh && <PWAToast message="Training data available offline" onClose={dismissOfflineReady} />}
     </div>
   );
 }
