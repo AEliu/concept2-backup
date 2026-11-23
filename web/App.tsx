@@ -117,6 +117,7 @@ function App() {
       </main>
       <footer className="site-width site-footer">
         <span>Concept2 Logbook</span>
+        {route.page !== 'dashboard' && <a href={import.meta.env.BASE_URL} data-route>← Dashboard</a>}
         <a href="https://github.com/Aeliu/concept2-backup" target="_blank" rel="noreferrer">GitHub source ↗︎</a>
       </footer>
       {needRefresh && <PWAToast message="New version available" actionLabel="Update" onAction={() => updateServiceWorker(true)} />}
