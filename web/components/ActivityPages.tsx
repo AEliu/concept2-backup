@@ -11,6 +11,7 @@ const localTime = new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-di
 const base = import.meta.env.BASE_URL;
 type MonthlyActivities = Record<string, ActivitySummary[]>;
 const emptyMonth: MonthlyActivities = {};
+export const monthHref = (month: string) => `${base}?month=${month}`;
 export const dayHref = (date: string) => `${base}?date=${date}`;
 export const activityHref = (id: string) => `${base}?activity=${id}`;
 
@@ -18,7 +19,9 @@ export function ActivityDay({ date, distance }: { date: string; distance?: numbe
   return (
     <>
       <div className="detail-header">
-        <a href={base} data-route className="back-link">← Dashboard</a>
+        <a href={monthHref(date.slice(0, 7))} data-route className="back-link">
+          ← {dateLabel(date, { month: 'long', year: 'numeric' })}
+        </a>
         <h1>{fullDate(date)}</h1>
         {distance !== undefined && <p className="panel-caption">{distanceMeters(distance)} m for the day</p>}
       </div>

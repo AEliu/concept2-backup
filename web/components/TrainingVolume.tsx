@@ -8,10 +8,11 @@ type Period = 'daily' | 'weekly' | 'monthly';
 
 const periods: [Period, string][] = [['daily', '30 days'], ['weekly', '8 weeks'], ['monthly', 'This year']];
 
-export function TrainingVolume({ data, today, onDay }: {
+export function TrainingVolume({ data, today, onDay, onMonth }: {
   data: DailyDistances;
   today: string;
   onDay?: (date: string) => void;
+  onMonth?: (month: string) => void;
 }) {
   const [period, setPeriod] = useState<Period>('daily');
   const points = period === 'daily' ? dailyVolume(data, today)
@@ -29,6 +30,9 @@ export function TrainingVolume({ data, today, onDay }: {
   const ticks = period === 'daily' ? points.filter((_, index) => index % 7 === 1 || index === 29).map(point => point.date) : undefined;
   const caption = period === 'monthly' ? today.slice(0, 4) : `${dateLabel(points[0].date)} – ${dateLabel(today)}`;
   const total = points.reduce((sum, point) => sum + point.meters, 0);
+  const openPeriod = period === 'daily' ? onDay
+    : period === 'monthly' && onMonth ? (date: string) => onMonth(date.slice(0, 7))
+    : undefined;
 
   return (
     <section className="panel volume-panel" aria-labelledby="volume-heading">
@@ -60,11 +64,11 @@ export function TrainingVolume({ data, today, onDay }: {
               radius={[2, 2, 0, 0]}
               maxBarSize={34}
               isAnimationActive={false}
-              onClick={period === 'daily' && onDay ? (_, index) => {
+              onClick={openPeriod ? (_, index) => {
                 const point = points[index];
-                if (point?.meters > 0) onDay(point.date);
+                if (point?.meters > 0) openPeriod(point.date);
               } : undefined}
-              className={period === 'daily' && onDay ? 'clickable-bars' : undefined}
+              className={openPeriod ? 'clickable-bars' : undefined}
             />
           </BarChart>
         </ResponsiveContainer>
